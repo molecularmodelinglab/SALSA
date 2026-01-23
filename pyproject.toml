@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "salsa-lit"
+version = "2.0.0"
+description = "SALSA: Structurally-Aware Latent Space Autoencoder for molecular embeddings"
+readme = "salsa_lit/README.md"
+license = {text = "MIT"}
+requires-python = ">=3.8"
+authors = [
+    {name = "Molecular Modeling Lab"}
+]
+keywords = [
+    "chemistry",
+    "machine-learning",
+    "deep-learning",
+    "molecular-embeddings",
+    "smiles",
+    "transformer",
+    "contrastive-learning",
+    "pytorch",
+    "lightning"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "torch",
+    "lightning",
+    "numpy",
+    "pandas",
+    "scipy",
+    "rdkit",
+    "tqdm",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+]
+
+[project.scripts]
+salsa-lit = "salsa_lit.cli.main:main"
+
+[project.urls]
+Repository = "https://github.com/molecularmodelinglab/SALSA_WIP"
+
+[tool.setuptools.packages.find]
+include = ["salsa_lit*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yml", "*.yaml", "*.csv", "*.txt"]
+
+[tool.black]
+line-length = 100
+target-version = ["py38", "py39", "py310", "py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100

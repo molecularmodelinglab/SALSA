@@ -46,6 +46,7 @@ def train_command(args):
         model_config=model_config,
         training_config=training_config,
         n_samp=args.n_samp if args.n_samp > 0 else None,
+        resume_ckpt=args.resume,
     )
 
     print(f"Training complete. Model saved to {args.output_dir}")
@@ -131,6 +132,8 @@ def main(argv=None):
     train_parser.add_argument('--accelerator', default='auto', help='Accelerator type')
     train_parser.add_argument('--precision', default='32', help='Training precision')
     train_parser.add_argument('--num-workers', type=int, default=4, help='DataLoader workers')
+    train_parser.add_argument('--resume', metavar='CKPT_PATH', default=None,
+                               help='Path to checkpoint to resume training from (e.g. last.ckpt)')
 
     # =========================================================================
     # Embed command
@@ -154,7 +157,7 @@ def main(argv=None):
     mutate_parser.add_argument('--weight', choices=['chembl', 'uniform'], default='chembl',
                                help='Mutation weighting scheme')
     mutate_parser.add_argument('--no-filter', action='store_true', help='Skip input filtering')
-    mutate_parser.add_argument('--max-len', type=int, default=100, help='Max SMILES length')
+    mutate_parser.add_argument('--max-len', type=int, default=120, help='Max SMILES length')
     mutate_parser.add_argument('--max-atoms', type=int, default=35, help='Max number of atoms')
 
     # =========================================================================

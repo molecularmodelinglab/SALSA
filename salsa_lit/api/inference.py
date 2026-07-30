@@ -56,7 +56,7 @@ def serve_salsa(
     ----------
     smiles : str or pd.DataFrame or List[str]
         Input SMILES. Can be:
-        - Path to CSV file with 'SMILES' column
+        - Path to CSV/PARQUET file with 'SMILES' column
         - DataFrame with 'SMILES' column
         - List of SMILES strings
     model : str or SalsaNet or SalsaLightningModule
@@ -107,7 +107,10 @@ def serve_salsa(
     if isinstance(smiles, list):
         df = pd.DataFrame({'SMILES': smiles})
     elif isinstance(smiles, str):
-        df = pd.read_csv(smiles)
+        if smiles.endswith('.parquet'):
+            df = pd.read_parquet(smiles, columns=['SMILES'])
+        else:
+            df = pd.read_csv(smiles, usecols=['SMILES'])
     else:
         df = smiles
 

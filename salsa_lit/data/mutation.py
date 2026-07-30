@@ -52,10 +52,6 @@ def _get_inv_cov_chembl():
 ATOM_TO_CNT_INV = {atom: 1 / cnt for atom, cnt in ATOM_TO_CNT.items()}
 
 
-# =============================================================================
-# Dataset filtering
-# =============================================================================
-
 def filter_source_ds(
     ds: Union[str, pd.DataFrame],
     max_len: int = MAX_ANC_LEN,
@@ -102,10 +98,6 @@ def filter_source_ds(
 
     return df
 
-
-# =============================================================================
-# Main mutation function
-# =============================================================================
 
 def mutate_data(
     ds: Union[str, pd.DataFrame],
@@ -235,10 +227,6 @@ def consolidate_mut_ds_chunks(work_path: str, out_path: str = None) -> str:
 
     return out_path
 
-
-# =============================================================================
-# Internal mutation helpers
-# =============================================================================
 
 def _get_muts_from_anc(
     anc_smi: str,
@@ -458,10 +446,6 @@ def _sample_muts(
     return muts_samp, neg_muts, False
 
 
-# =============================================================================
-# Mutation actions
-# =============================================================================
-
 def _generate_mut_tup(
     anc_mol,
     action_type: str,
@@ -514,7 +498,7 @@ def _generate_mut_tup(
         return
 
     if mut_mol is None:
-        raise ValueError(f"failed to recognize action '{action_type}'")
+        return
 
     # Return none if mol is invalid
     if mut_mol.GetNumAtoms() == 0:
@@ -574,10 +558,6 @@ def remove_atom_from_mol(mol, aidx: int, clean_aroms: bool = True, remake_mol: b
         mol_new = Chem.MolFromSmiles(Chem.MolToSmiles(mol_new))
     return mol_new, atom_removed
 
-
-# =============================================================================
-# Accessory functions
-# =============================================================================
 
 def copy_atom(atom, atommap: bool = True):
     """Copy an RDKit atom."""

@@ -149,7 +149,4 @@ def prepare_training_data(
         use_tqdm=True
     )
 
-    print(f"Created training dataset with {len(result_df)} samples")
-    print(f"Saved to {output_path}")
-
     return result_df, output_path

@@ -94,6 +94,27 @@ class SalsaDataModule(L.LightningDataModule):
                     self.tokenizer
                 )
 
+    def _get_sharded_anc_ids(self, dataset: TrainingDataset) -> list:
+        """
+        Return anc_ids for this rank's shard of families.
+
+        In DDP each rank receives a disjoint slice of the anchor family set
+        so that every family is processed by exactly one GPU per epoch.
+        In single-GPU mode the full list is returned unchanged.
+        """
+        anc_id_set = dataset.anc_id_set
+        fam_size = dataset.fam_size
+
+        if self.trainer is not None and self.trainer.world_size > 1:
+            rank = self.trainer.global_rank
+            world_size = self.trainer.world_size
+            rank_anc_id_set = anc_id_set[rank::world_size]
+        else:
+            rank_anc_id_set = anc_id_set
+
+        # Reconstruct the flat anc_ids list for this rank's families
+        return [aid for aid in rank_anc_id_set for _ in range(fam_size)]
+
     def train_dataloader(self) -> DataLoader:
         """
         Create training dataloader with family sampler.
@@ -104,7 +125,7 @@ class SalsaDataModule(L.LightningDataModule):
             Training dataloader
         """
         sampler = RandomFamSampler(
-            self.train_dataset.anc_ids,
+            self._get_sharded_anc_ids(self.train_dataset),
             batch_size=self._adjusted_batch_size,
             drop_last=True
         )
@@ -129,7 +150,7 @@ class SalsaDataModule(L.LightningDataModule):
             return None
 
         sampler = RandomFamSampler(
-            self.val_dataset.anc_ids,
+            self._get_sharded_anc_ids(self.val_dataset),
             batch_size=self._adjusted_batch_size,
             drop_last=True
         )

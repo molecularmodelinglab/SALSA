@@ -25,6 +25,7 @@ def cook_salsa(
     model_config: ModelConfig = None,
     training_config: TrainingConfig = None,
     n_samp: int = None,
+    resume_ckpt: str = None,
 ):
     """
     Train a SALSA model using PyTorch Lightning.
@@ -135,12 +136,13 @@ def cook_salsa(
         gradient_clip_val=training_config.gradient_clip_val,
         accumulate_grad_batches=training_config.accumulate_grad_batches,
         callbacks=callbacks,
-        enable_progress_bar=True,
+        enable_progress_bar=False,
         log_every_n_steps=50,
+        use_distributed_sampler=False,
     )
 
     # Train
-    trainer.fit(lightning_module, data_module)
+    trainer.fit(lightning_module, data_module, ckpt_path=resume_ckpt)
 
     # Save final model weights in original format for compatibility
     final_weights_path = os.path.join(save_dir, 'model_trained_model.pt')

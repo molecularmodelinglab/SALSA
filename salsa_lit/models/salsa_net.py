@@ -103,12 +103,13 @@ class SalsaNet(nn.Module):
         )
 
         # Set-based pooling (Attention aggregation)
-        self.pma = PMA(
-            dim=self.dim_emb,
-            num_heads=_nhead,
-            num_seeds=1,
-            ln=False
-        )
+        if self.pool_func == 'set':
+            self.pma = PMA(
+                dim=self.dim_emb,
+                num_heads=_nhead,
+                num_seeds=1,
+                ln=False
+            )
 
         # Squeeze to SALSA dimensions
         self.salsa_layer = nn.Linear(
@@ -117,7 +118,8 @@ class SalsaNet(nn.Module):
         )
 
         # Projection head
-        self.proj_net = ProjHead(dim=_dim_salsa)
+        if self.proj_head:
+            self.proj_net = ProjHead(dim=_dim_salsa)
 
         # Upsample to embedding dimensions
         self.upsamp_layer = nn.Linear(
@@ -232,28 +234,25 @@ class SalsaNet(nn.Module):
         else:
             inter_latent = salsa_latent
 
-        if self.training:
-            # Decode
-            salsa_out = self.upsamp_layer(salsa_latent)
-            salsa_out = salsa_out.reshape(-1, MAX_VEC_LEN, self.dim_emb)
-            dec_out = self.dec(
-                tgt=emb_seq,
-                memory=salsa_out,
-                tgt_mask=mask,
-                memory_mask=mask,
-                tgt_key_padding_mask=pad_mask,
-                memory_key_padding_mask=pad_mask
-            )
-            # Get decoder outputs
-            dec_out = self.decode_out(dec_out).masked_fill(out_mask == 1, -1e4)
+        # Decode
+        salsa_out = self.upsamp_layer(salsa_latent)
+        salsa_out = salsa_out.reshape(-1, MAX_VEC_LEN, self.dim_emb)
+        dec_out = self.dec(
+            tgt=emb_seq,
+            memory=salsa_out,
+            tgt_mask=mask,
+            memory_mask=mask,
+            tgt_key_padding_mask=pad_mask,
+            memory_key_padding_mask=pad_mask
+        )
+        # Get decoder outputs
+        dec_out = self.decode_out(dec_out).masked_fill(out_mask == 1, -1e4)
 
-            # Reshape for contrastive loss
-            salsa_latent = torch.stack(torch.split(salsa_latent, self.fam_size), dim=0)
-            inter_latent = torch.stack(torch.split(inter_latent, self.fam_size), dim=0)
+        # Reshape for contrastive loss
+        salsa_latent = torch.stack(torch.split(salsa_latent, self.fam_size), dim=0)
+        inter_latent = torch.stack(torch.split(inter_latent, self.fam_size), dim=0)
 
-            return salsa_latent, inter_latent, dec_out
-        else:
-            return salsa_latent, inter_latent
+        return salsa_latent, inter_latent, dec_out
 
     def embed(self, seq: torch.Tensor, pad_mask: torch.Tensor = None,
               avg_mask: torch.Tensor = None, out_mask: torch.Tensor = None,

@@ -2,3 +2,8 @@ __pycache__/
 .venv/
 .vscode/
 *egg-info/
+training_runs/
+*.out
+slurm-*
+scratch*
+data/

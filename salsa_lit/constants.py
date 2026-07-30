@@ -35,10 +35,10 @@ N_TOKENS = len(TOKENS)  # 39
 # Sequence Length Constants
 # ============================================================================
 
-MAX_ANC_LEN = 100   # Maximum anchor SMILES length for filtering
-MAX_MUT_LEN = 120   # Maximum mutant SMILES length
-MAX_SMI_LEN = 120   # Maximum SMILES string length (after tokenization)
-MAX_VEC_LEN = 122   # Maximum vector length (max_smi_len + 2 for start/end)
+MAX_ANC_LEN = 120   # Maximum anchor SMILES length for filtering
+MAX_MUT_LEN = 150   # Maximum mutant SMILES length
+MAX_SMI_LEN = 150   # Maximum SMILES string length (after tokenization)
+MAX_VEC_LEN = 152   # Maximum vector length (max_smi_len + 2 for start/end)
 MAX_POS_LEN = 5000  # Maximum positional encoding length
 
 

@@ -55,7 +55,7 @@ def count_atoms(smiles):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return 0
-    return len(mol.GetAtoms())
+    return mol.GetNumHeavyAtoms()
 
 
 def neutralize_atoms(smi):

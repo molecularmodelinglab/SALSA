@@ -28,7 +28,7 @@ class TrainingConfig:
     devices : int or List[int] or str
         Number of devices or specific device IDs
     precision : Literal['32', '16-mixed', 'bf16-mixed']
-        Training precision
+        Training precision. Defaults to 'bf16-mixed' for speed.
     gradient_clip_val : Optional[float]
         Gradient clipping value
     accumulate_grad_batches : int
@@ -43,7 +43,7 @@ class TrainingConfig:
     save_step: int = 10000
     accelerator: str = 'auto'
     devices: Union[int, List[int], str] = 1
-    precision: str = '32'
+    precision: str = 'bf16-mixed'
     gradient_clip_val: Optional[float] = None
     accumulate_grad_batches: int = 1
     num_workers: int = 4

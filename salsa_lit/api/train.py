@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Union, List
 
 import yaml
+import torch
 import pandas as pd
 import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint
@@ -70,6 +71,8 @@ def cook_salsa(
     model_config = model_config or ModelConfig()
     training_config = training_config or TrainingConfig()
 
+    torch.set_float32_matmul_precision('high')
+
     # Set up save directory
     if save_dir is None:
         save_dir = os.path.abspath(
@@ -126,9 +129,13 @@ def cook_salsa(
     )
     callbacks.append(checkpoint_callback)
 
+    has_val = val_csv is not None
+
     # Create trainer
     trainer = L.Trainer(
         default_root_dir=save_dir,
+        limit_val_batches=1.0 if has_val else 0,
+        num_sanity_val_steps=2 if has_val else 0,
         max_epochs=training_config.n_epochs,
         accelerator=training_config.accelerator,
         devices=training_config.devices,
@@ -146,7 +153,6 @@ def cook_salsa(
 
     # Save final model weights in original format for compatibility
     final_weights_path = os.path.join(save_dir, 'model_trained_model.pt')
-    import torch
     torch.save(lightning_module.model.state_dict(), final_weights_path)
     print(f"Saved final model to {final_weights_path}")
 

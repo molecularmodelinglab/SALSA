@@ -66,6 +66,7 @@ class InferenceDataset(Dataset):
         cols = ['ID', 'Origin_id', 'SMILES'] + other_cols
 
         self.dataframe = df[cols].copy()
+        self._smiles = self.dataframe["SMILES"].tolist()
 
     def __len__(self):
         return len(self.dataframe)
@@ -92,7 +93,7 @@ class InferenceDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        smi = self.dataframe.iloc[idx]["SMILES"]
+        smi = self._smiles[idx]
         vec = self.tokenizer.encode(smi)
         pad_mask, avg_mask, out_mask = self.tokenizer.get_masks(vec)
 
@@ -125,23 +126,35 @@ class TrainingDataset(Dataset):
 
     Attributes
     ----------
-    dataframe : pd.DataFrame
-        Processed training data
     fam_size : int
         Number of molecules per family (anchor + mutants)
     anc_ids : list
         List of anchor IDs for all samples
     anc_id_set : list
         Unique anchor IDs
+
+    Notes
+    -----
+    The processed DataFrame is not kept as an attribute. Its columns are
+    flattened into lists/arrays at construction so that __getitem__ avoids
+    per-sample pandas row indexing, and so that dataloader workers do not
+    each inherit a copy of a 42M-row frame.
     """
 
     def __init__(self, ds, tokenizer: SMILESTokenizer = None, n_samp: int = None):
         super().__init__()
 
         self.tokenizer = tokenizer or SMILESTokenizer()
-        self.dataframe, self.fam_size = self._process_data(ds, n_samp=n_samp)
-        self.anc_ids = self.dataframe["Anc_id"].tolist()
-        self.anc_id_set = self.dataframe["Anc_id"].unique().tolist()
+        df, self.fam_size = self._process_data(ds, n_samp=n_samp)
+
+        self.anc_ids = df["Anc_id"].tolist()
+        self.anc_id_set = df["Anc_id"].unique().tolist()
+
+        self._ids = df["ID"].to_numpy()
+        self._smiles = df["SMILES"].tolist()
+        self._is_anc = df["Is_anc"].to_numpy()
+        self._anc_id = df["Anc_id"].to_numpy()
+        self._fam_id = df["Fam_id"].to_numpy()
 
     def _process_data(self, ds, n_samp=None):
         """
@@ -203,7 +216,7 @@ class TrainingDataset(Dataset):
         return df, fam_size
 
     def __len__(self):
-        return len(self.dataframe)
+        return len(self._smiles)
 
     def __getitem__(self, idx):
         """
@@ -230,16 +243,16 @@ class TrainingDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        _id, smi, is_anc, anc_id, fam_id = self.dataframe.iloc[idx].values
+        smi = self._smiles[idx]
         vec = self.tokenizer.encode(smi)
         pad_mask, avg_mask, out_mask = self.tokenizer.get_masks(vec)
 
         return {
             'seq': vec,
             'smiles': smi,
-            'is_anc': is_anc,
-            'anc_id': anc_id,
-            'fam_id': fam_id,
+            'is_anc': self._is_anc[idx],
+            'anc_id': self._anc_id[idx],
+            'fam_id': self._fam_id[idx],
             'pad_mask': pad_mask,
             'avg_mask': avg_mask,
             'out_mask': out_mask,

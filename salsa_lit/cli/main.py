@@ -130,7 +130,9 @@ def main(argv=None):
     # Hardware
     train_parser.add_argument('--devices', type=int, default=1, help='Number of GPUs')
     train_parser.add_argument('--accelerator', default='auto', help='Accelerator type')
-    train_parser.add_argument('--precision', default='32', help='Training precision')
+    train_parser.add_argument('--precision', default='bf16-mixed',
+                               help="Training precision: 'bf16-mixed' (default), "
+                                    "'16-mixed', or '32'")
     train_parser.add_argument('--num-workers', type=int, default=4, help='DataLoader workers')
     train_parser.add_argument('--resume', metavar='CKPT_PATH', default=None,
                                help='Path to checkpoint to resume training from (e.g. last.ckpt)')

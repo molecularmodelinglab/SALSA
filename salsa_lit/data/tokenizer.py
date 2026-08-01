@@ -60,6 +60,15 @@ class SMILESTokenizer:
         self.p_idx = self.tokens.index(P_TOKEN)
         self.unk_idx = self.tokens.index(UNK_TOKEN)
 
+        self._lut = np.full(256, self.unk_idx, dtype=np.int64)
+        for i, char in enumerate(self.tokens):
+            self._lut[ord(char)] = i
+
+        out_mask = torch.zeros(self.n_tokens)
+        out_mask[self.s_idx] = 1.0
+        out_mask[self.p_idx] = 1.0
+        self._out_mask = out_mask.unsqueeze(0)
+
     def encode(self, smiles: str) -> torch.Tensor:
         """
         Convert a SMILES string to a tensor of token indices.
@@ -76,18 +85,18 @@ class SMILESTokenizer:
         """
         # Convert Br/Cl to single characters
         smi = self._do_BrCl_singles(smiles)
-        # Replace unknown characters
-        smi = self._replace_unks(smi)
-        # Add padding
-        padding = ''.join([self.p_token for _ in range(self.max_len - len(smi))])
-        smi = self.s_token + smi + self.e_token + padding
+        n = len(smi)
 
-        # Convert to indices
-        vec = torch.zeros(len(smi), dtype=torch.long)
-        for i, char in enumerate(smi):
-            vec[i] = self.tokens.index(char)
+        total = self.max_vec_len if n <= self.max_len else n + 2
 
-        return vec
+        vec = np.full(total, self.p_idx, dtype=np.int64)
+        vec[0] = self.s_idx
+        if n:
+            raw = np.frombuffer(smi.encode('ascii', 'replace'), dtype=np.uint8)
+            vec[1:1 + n] = self._lut[raw]
+        vec[1 + n] = self.e_idx
+
+        return torch.from_numpy(vec)
 
     def decode(self, vec: torch.Tensor, remove_special: bool = True) -> str:
         """
@@ -181,18 +190,13 @@ class SMILESTokenizer:
         pad_mask = (vec == self.p_idx)
 
         # avg mask: masks pad, start, end tokens
-        avg_mask = (
-            (vec == self.p_idx) | (vec == self.e_idx) | (vec == self.s_idx)
+        avg_mask = 1.0 - (
+            pad_mask | (vec == self.e_idx) | (vec == self.s_idx)
         ).float()
-        avg_mask = torch.ones_like(avg_mask) - avg_mask
 
-        # out mask: masks start and pad tokens in output logits
-        out_mask = torch.ones(self.n_tokens)
-        idx = torch.tensor([self.s_idx, self.p_idx])
-        out_mask = torch.zeros_like(out_mask).scatter_(0, idx, out_mask)
-        out_mask = out_mask.unsqueeze(0)
-
-        return pad_mask, avg_mask, out_mask
+        # out mask: masks start and pad tokens in output logits. Constant for
+        # every sample, so it is built once in __init__ and shared here.
+        return pad_mask, avg_mask, self._out_mask
 
     def _do_BrCl_singles(self, smiles: str) -> str:
         """

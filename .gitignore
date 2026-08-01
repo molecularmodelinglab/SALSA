@@ -7,3 +7,4 @@ training_runs/
 slurm-*
 scratch*
 data/
+!salsa_lit/data

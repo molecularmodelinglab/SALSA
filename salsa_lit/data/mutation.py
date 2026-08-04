@@ -1,8 +1,5 @@
 """
 Molecule mutation utilities for SALSA dataset creation.
-
-This module provides functions to generate mutated versions of molecules
-for contrastive learning. Mutations include adding, removing, and replacing atoms.
 """
 
 import os
@@ -52,6 +49,19 @@ def _get_inv_cov_chembl():
 ATOM_TO_CNT_INV = {atom: 1 / cnt for atom, cnt in ATOM_TO_CNT.items()}
 
 
+def _is_real_mol(smi: str) -> bool:
+    """
+    True if `smi` parses to a molecule with at least one atom.
+
+    Chem.MolFromSmiles('') returns a valid Mol of zero atoms rather than None,
+    so an emptiness check on the string alone is not enough.
+    """
+    if not smi or not smi.strip():
+        return False
+    mol = Chem.MolFromSmiles(smi)
+    return mol is not None and mol.GetNumAtoms() > 0
+
+
 def filter_source_ds(
     ds: Union[str, pd.DataFrame],
     max_len: int = MAX_ANC_LEN,
@@ -83,6 +93,12 @@ def filter_source_ds(
 
     # Canonicalize smiles
     df['SMILES'] = df["SMILES"].apply(lambda x: get_cansmiles(x))
+
+    n_before = len(df)
+    df = df[df["SMILES"].str.len() > 0].copy()
+    n_dropped = n_before - len(df)
+    if n_dropped:
+        print(f"Dropped {n_dropped} SMILES that failed to parse")
 
     # Filter by length
     df['Len'] = df["SMILES"].apply(lambda x: len(x))
@@ -419,6 +435,9 @@ def _sample_muts(
             raise ValueError(f"Unknown weight setting: {weight}, must be from ['chembl', 'uniform']")
 
         if mut_smi in mut_smis:
+            continue
+
+        if not _is_real_mol(mut_smi):
             continue
 
         # Mahalanobis distance filtering

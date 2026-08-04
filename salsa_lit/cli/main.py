@@ -94,6 +94,33 @@ def mutate_command(args):
     print(f"Saved to {output_path}")
 
 
+def supermutate_command(args):
+    """Create supermutant dataset for evaluation."""
+    from salsa_lit.config import SuperMutantConfig
+    from salsa_lit.api.supermutate import prepare_supermutant_data
+
+    config = SuperMutantConfig(
+        depth=args.depth,
+        n_branches=args.n_branches,
+        mahala_thresh=args.mahala_thresh,
+        weight=args.weight,
+    )
+
+    df, output_path = prepare_supermutant_data(
+        smiles_file=args.input,
+        output_dir=args.output_dir,
+        config=config,
+        n_samp=args.n_samp,
+        filter_data=not args.no_filter,
+        max_len=args.max_len,
+        max_atoms=args.max_atoms,
+        n_jobs=args.n_jobs,
+    )
+
+    print(f"Created supermutant dataset with {len(df)} compounds")
+    print(f"Saved to {output_path}")
+
+
 def main(argv=None):
     """Main entry point for SALSA CLI."""
     parser = argparse.ArgumentParser(
@@ -163,6 +190,28 @@ def main(argv=None):
     mutate_parser.add_argument('--max-atoms', type=int, default=35, help='Max number of atoms')
 
     # =========================================================================
+    # Supermutate command
+    # =========================================================================
+    sup_parser = subparsers.add_parser(
+        'supermutate',
+        help='Create supermutant dataset (chains of successive edits) for evaluation')
+    sup_parser.add_argument('input', help='Input CSV with SMILES and ID columns')
+    sup_parser.add_argument('-o', '--output-dir', help='Output directory')
+    sup_parser.add_argument('--n-samp', type=int, default=-1, help='Number of anchors to sample')
+    sup_parser.add_argument('--depth', type=int, default=5,
+                            help='Max GED depth; one compound per depth 1..N')
+    sup_parser.add_argument('--n-branches', type=int, default=1,
+                            help='Independent chains grown per anchor')
+    sup_parser.add_argument('--mahala-thresh', type=float, default=6.0,
+                            help='Mahalanobis threshold, applied at every step')
+    sup_parser.add_argument('--weight', choices=['chembl', 'uniform'], default='chembl',
+                            help='Mutation weighting scheme')
+    sup_parser.add_argument('--n-jobs', type=int, default=1, help='Worker processes')
+    sup_parser.add_argument('--no-filter', action='store_true', help='Skip input filtering')
+    sup_parser.add_argument('--max-len', type=int, default=120, help='Max SMILES length')
+    sup_parser.add_argument('--max-atoms', type=int, default=35, help='Max number of atoms')
+
+    # =========================================================================
     # Parse and dispatch
     # =========================================================================
     args = parser.parse_args(argv)
@@ -177,6 +226,8 @@ def main(argv=None):
         embed_command(args)
     elif args.command == 'mutate':
         mutate_command(args)
+    elif args.command == 'supermutate':
+        supermutate_command(args)
     else:
         parser.print_help()
         sys.exit(1)

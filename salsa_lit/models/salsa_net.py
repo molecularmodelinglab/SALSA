@@ -4,6 +4,7 @@ SalsaNet model for learning structurally aware latent space autoencoder.
 
 import os
 import math
+import warnings
 import numpy as np
 import yaml
 
@@ -218,16 +219,12 @@ class SalsaNet(nn.Module):
         emb_seq = self.pos_enc(self.embedding(seq))
         enc_out = self.enc(src=emb_seq, mask=mask, src_key_padding_mask=pad_mask)
 
-        # Aggregate the latent vector
         enc_agg = self.aggregate_vec(avg_mask, enc_out)
 
-        # Squeeze to SALSA dimensions
         salsa_latent = self.salsa_layer(enc_agg)
 
-        # Normalize
         salsa_latent = F.normalize(salsa_latent, p=2.0, dim=-1)
 
-        # Get projection head latents if needed
         if self.proj_head:
             proj_latent = self.proj_net(salsa_latent)
             inter_latent = proj_latent
@@ -245,7 +242,6 @@ class SalsaNet(nn.Module):
             tgt_key_padding_mask=pad_mask,
             memory_key_padding_mask=pad_mask
         )
-        # Get decoder outputs
         dec_out = self.decode_out(dec_out).masked_fill(out_mask == 1, -1e4)
 
         # Reshape for contrastive loss
@@ -281,27 +277,21 @@ class SalsaNet(nn.Module):
         if len(seq.shape) == 1:
             seq = seq.unsqueeze(0)
 
-        # Masks
         mask = get_downstream_mask(seq)
         if avg_mask is None:
             avg_mask = torch.ones_like(seq)
         if out_mask is None:
             out_mask = torch.zeros(N_TOKENS).to(seq.device)
 
-        # Encode
         emb_seq = self.pos_enc(self.embedding(seq))
         enc_out = self.enc(src=emb_seq, mask=mask, src_key_padding_mask=pad_mask)
 
-        # Aggregate the latent vector
         enc_agg = self.aggregate_vec(avg_mask, enc_out)
 
-        # Squeeze to SALSA dimensions
         salsa_latent = self.salsa_layer(enc_agg)
 
-        # Normalize
         salsa_latent = F.normalize(salsa_latent, p=2.0, dim=-1)
 
-        # Get projection head latents if needed
         if self.proj_head:
             proj_latent = self.proj_net(salsa_latent)
             inter_latent = proj_latent
@@ -429,7 +419,18 @@ class SalsaNet(nn.Module):
             weights_path = path
             params_path = os.path.join(os.path.dirname(path), 'params.yml')
 
-        # Load config
+        obj = torch.load(weights_path, map_location=map_location, weights_only=False)
+
+        if isinstance(obj, dict) and 'state_dict' in obj:
+            hparams = obj.get('hyper_parameters') or {}
+            if config is None and hparams.get('model_config'):
+                config = ModelConfig.from_dict(hparams['model_config'])
+            prefix = 'model.'
+            state_dict = {k[len(prefix):]: v for k, v in obj['state_dict'].items()
+                          if k.startswith(prefix)}
+        else:
+            state_dict = obj
+
         if config is None:
             if os.path.exists(params_path):
                 with open(params_path, 'r') as f:
@@ -440,8 +441,20 @@ class SalsaNet(nn.Module):
 
         # Create model and load weights
         model = cls(config)
-        state_dict = torch.load(weights_path, map_location=map_location)
-        model.load_state_dict(state_dict, strict=False)
+        incompatible = model.load_state_dict(state_dict, strict=False)
+
+        n_loaded = len(model.state_dict()) - len(incompatible.missing_keys)
+        if n_loaded == 0:
+            raise RuntimeError(
+                f"No weights loaded from {weights_path}: none of its keys match "
+                f"SalsaNet. Found keys like {list(state_dict)[:3]}"
+            )
+        if incompatible.missing_keys:
+            warnings.warn(
+                f"{len(incompatible.missing_keys)} parameters were absent from "
+                f"{weights_path} and keep their initial values "
+                f"(e.g. {incompatible.missing_keys[:3]})"
+            )
 
         return model
 
@@ -456,9 +469,7 @@ class SalsaNet(nn.Module):
         """
         os.makedirs(path, exist_ok=True)
 
-        # Save config
         with open(os.path.join(path, 'params.yml'), 'w') as f:
             yaml.dump(self.config.to_dict(), f)
 
-        # Save weights
         torch.save(self.state_dict(), os.path.join(path, 'model_trained_model.pt'))

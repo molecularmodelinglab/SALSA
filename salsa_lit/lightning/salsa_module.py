@@ -49,6 +49,11 @@ class SalsaLightningModule(L.LightningModule):
     ):
         super().__init__()
 
+        if isinstance(model_config, dict):
+            model_config = ModelConfig.from_dict(model_config)
+        if isinstance(training_config, dict):
+            training_config = TrainingConfig.from_dict(training_config)
+
         # Use defaults if not provided
         self.model_config = model_config or ModelConfig()
         self.training_config = training_config or TrainingConfig()

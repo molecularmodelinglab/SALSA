@@ -62,6 +62,7 @@ def embed_command(args):
         output_file=args.output,
         batch_size=args.batch_size,
         device=args.device,
+        filter_input=args.filter,
     )
 
     print(f"Generated {len(embeddings)} embeddings of dimension {embeddings.shape[1]}")
@@ -173,6 +174,9 @@ def main(argv=None):
     embed_parser.add_argument('-o', '--output', help='Output CSV for embeddings')
     embed_parser.add_argument('--batch-size', type=int, default=50, help='Inference batch size')
     embed_parser.add_argument('--device', help='Device (cpu, cuda, cuda:0, etc.)')
+    embed_parser.add_argument('--filter', action='store_true',
+                              help='Drop multi-fragment or over-length SMILES instead of '
+                                   'erroring on them (costs a canonicalization pass)')
 
     # =========================================================================
     # Mutate command

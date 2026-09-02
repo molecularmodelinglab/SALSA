@@ -82,14 +82,23 @@ class SMILESTokenizer:
         -------
         vec : torch.Tensor
             Tensor of shape (max_vec_len,) with token indices
+
+        Raises
+        ------
+        ValueError
+            If the SMILES is longer than max_len.
         """
         # Convert Br/Cl to single characters
         smi = self._do_BrCl_singles(smiles)
         n = len(smi)
 
-        total = self.max_vec_len if n <= self.max_len else n + 2
+        if n > self.max_len:
+            raise ValueError(
+                f"SMILES is {n} tokens long, over the max_len of {self.max_len} "
+                f"the model was trained on: {smiles!r}"
+            )
 
-        vec = np.full(total, self.p_idx, dtype=np.int64)
+        vec = np.full(self.max_vec_len, self.p_idx, dtype=np.int64)
         vec[0] = self.s_idx
         if n:
             raw = np.frombuffer(smi.encode('ascii', 'replace'), dtype=np.uint8)

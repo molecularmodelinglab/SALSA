@@ -14,10 +14,12 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from salsa_lit.config import ModelConfig
+from salsa_lit.constants import MAX_SMI_LEN
 from salsa_lit.models.salsa_net import SalsaNet
 from salsa_lit.lightning.salsa_module import SalsaLightningModule
 from salsa_lit.data.tokenizer import SMILESTokenizer
 from salsa_lit.data.datasets import InferenceDataset
+from salsa_lit.utils.chemistry import get_cansmiles
 
 
 def load_model(path: str, map_location: str = None) -> SalsaNet:
@@ -48,6 +50,7 @@ def serve_salsa(
     output_file: str = None,
     batch_size: int = 50,
     device: str = None,
+    filter_input: bool = False,
 ) -> Tuple[np.ndarray, List[str]]:
     """
     Generate SALSA embeddings for a set of SMILES.
@@ -71,6 +74,9 @@ def serve_salsa(
     device : str, optional
         Device to use ('cpu', 'cuda', 'cuda:0', etc.)
         If None, uses CUDA if available.
+    filter_input : bool
+        Screen out inputs the model cannot embed (multi-fragment SMILES, or
+        SMILES longer than MAX_SMI_LEN).
 
     Returns
     -------
@@ -113,6 +119,16 @@ def serve_salsa(
             df = pd.read_csv(smiles, usecols=['SMILES'])
     else:
         df = smiles
+
+    # Filter input if requested
+    if filter_input:
+        df = df.copy()
+        df['SMILES'] = df['SMILES'].apply(get_cansmiles)
+        unusable = (df['SMILES'].str.contains('.', regex=False)
+                    | (df['SMILES'].str.len() > MAX_SMI_LEN))
+        if unusable.any():
+            print(f"Dropping {unusable.sum()} multi-fragment or over-length SMILES")
+            df = df[~unusable]
 
     # Create dataset and loader
     tokenizer = SMILESTokenizer()

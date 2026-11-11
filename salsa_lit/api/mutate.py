@@ -56,11 +56,20 @@ def mutate_dataset(
     # Use defaults
     data_config = data_config or DataConfig()
 
+    # Determine output path up front, so the path returned is the path written
+    if output_file is None:
+        n_ancs = n_samp if n_samp > 0 else 'all'
+        output_file = os.path.join(
+            os.getcwd(),
+            f'mutants_{timestamp()}_{n_ancs}-ancs_{data_config.n_muts}-muts.csv'
+        )
+    out_dir, out_name = os.path.split(output_file)
+
     # Call the core mutation function
     df = mutate_data(
         ds=smiles_file,
-        out_name=output_file,
-        out_dir=None if output_file else os.getcwd(),
+        out_name=out_name,
+        out_dir=out_dir or os.getcwd(),
         n_samp=n_samp,
         num_muts=data_config.n_muts,
         actions=data_config.actions,
@@ -68,10 +77,6 @@ def mutate_dataset(
         weight=data_config.weight,
         use_tqdm=use_tqdm
     )
-
-    # Determine output path
-    if output_file is None:
-        output_file = f'mutants_{timestamp()}_{n_samp}-ancs_{data_config.n_muts}-muts.csv'
 
     return df, output_file
 

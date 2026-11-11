@@ -58,8 +58,18 @@ def supermutate_dataset(
     """
     config = config or SuperMutantConfig()
 
-    out_dir, out_name = (os.path.split(output_file) if output_file
-                         else (os.getcwd(), None))
+    # Determine output path up front, so the path returned is the path written
+    if output_file is None:
+        n_ancs = n_samp if n_samp > 0 else 'all'
+        acts = ''.join(a[0] for a in config.actions)
+        output_file = os.path.join(
+            os.getcwd(),
+            f'supermutants_{timestamp()}_{n_ancs}-ancs_'
+            f'{config.depth}-depth_{config.n_branches}-branches_'
+            f'{config.mahala_thresh}-mthresh_{config.weight}-weight_'
+            f'{acts}-acts.csv'
+        )
+    out_dir, out_name = os.path.split(output_file)
 
     df = supermutate_data(
         ds=smiles_file,

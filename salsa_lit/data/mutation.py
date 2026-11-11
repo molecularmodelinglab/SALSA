@@ -176,10 +176,11 @@ def mutate_data(
     if out_dir is None:
         out_dir = os.getcwd()
     out_file = os.path.join(out_dir, out_name)
+    os.makedirs(os.path.dirname(out_file) or '.', exist_ok=True)
 
     # Write header
     with open(out_file, 'w') as f:
-        f.write(",".join(['Is_anc', 'Anc_id', 'Smiles', 'Action', 'At_atom', 'To_atom', 'Prop_dist']) + "\n")
+        f.write(",".join(['Is_anc', 'Anc_id', 'SMILES', 'Action', 'At_atom', 'To_atom', 'Prop_dist']) + "\n")
 
     # Process mutants for each SMILES
     rows = []

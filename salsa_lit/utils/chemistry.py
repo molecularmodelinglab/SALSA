@@ -140,10 +140,7 @@ def get_atom_cnts(smileses):
 
         for atom in mol.GetAtoms():
             atom_type = atom.GetSymbol()
-            if atom_type not in atom_to_cnt:
-                atom_to_cnt[atom_type] = 0
-            else:
-                atom_to_cnt[atom_type] += 1
+            atom_to_cnt[atom_type] = atom_to_cnt.get(atom_type, 0) + 1
 
     return atom_to_cnt
 

@@ -6,5 +6,11 @@ training_runs/
 *.out
 slurm-*
 scratch*
-data/
-!salsa_lit/data
+/data/diversity_data/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+lightning_logs/
+.ipynb_checkpoints/

@@ -10,10 +10,7 @@ import numpy as np
 import pandas as pd
 
 
-# ============================================================================
-# Tokenization Constants
-# ============================================================================
-
+### Tokenization Constants
 # Base vocabulary for SMILES tokenization
 VOCAB = '#%()+-0123456789<=>BCFHILNOPRSX[]cnosp$'
 
@@ -31,9 +28,7 @@ TOKENS = ''.join(list(np.sort(_tokens)))
 N_TOKENS = len(TOKENS)  # 39
 
 
-# ============================================================================
-# Sequence Length Constants
-# ============================================================================
+### Sequence Length Constants
 
 MAX_ANC_LEN = 120   # Maximum anchor SMILES length for filtering
 MAX_MUT_LEN = 150   # Maximum mutant SMILES length
@@ -42,9 +37,7 @@ MAX_VEC_LEN = 152   # Maximum vector length (max_smi_len + 2 for start/end)
 MAX_POS_LEN = 5000  # Maximum positional encoding length
 
 
-# ============================================================================
-# Mutation Constants
-# ============================================================================
+### Mutation Constants
 
 # Valid mutation actions
 ACTIONS = ['Add', 'Replace', 'Remove']
@@ -79,18 +72,14 @@ ATOM_TO_CNT = {
 ATOM_TO_CNT_INV = {atom: 1 / cnt for atom, cnt in ATOM_TO_CNT.items()}
 
 
-# ============================================================================
-# Loss Function Names
-# ============================================================================
+### Loss Function Names
 
 NAMED_LOSSES = ['Recon', 'SupCon']
 
 
-# ============================================================================
-# Data File Paths (relative to package)
-# ============================================================================
+### Data File Paths (relative to package)
 
-_PACK_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+_PACK_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Path to inverse covariance matrix for Mahalanobis distance
 INV_COV_CHEMBL_PATH = os.path.join(_PACK_DIR, 'data/config/pseudo_chembl_inv_cov_20230510.txt')

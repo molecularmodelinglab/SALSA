@@ -26,6 +26,9 @@ class InferenceDataset(Dataset):
         Tokenizer for SMILES conversion. Created if not provided.
     filter_ : bool
         Whether to filter invalid/long SMILES
+    canonicalize : bool
+        Whether to canonicalize the SMILES. Pass False when the caller has
+        already done it, so the work is not repeated.
 
     Attributes
     ----------
@@ -35,7 +38,8 @@ class InferenceDataset(Dataset):
         Tokenizer instance
     """
 
-    def __init__(self, ds, tokenizer: SMILESTokenizer = None, filter_: bool = False):
+    def __init__(self, ds, tokenizer: SMILESTokenizer = None, filter_: bool = False,
+                 canonicalize: bool = True):
         super().__init__()
 
         self.tokenizer = tokenizer or SMILESTokenizer()
@@ -47,8 +51,11 @@ class InferenceDataset(Dataset):
         df['Origin_id'] = df.index
 
         # Canonicalize SMILES
-        df['SMILES'] = df["SMILES"].apply(lambda x: get_cansmiles(x))
-        df = df[df['SMILES'].str.len() > 0]  # remove empty SMILES
+        if canonicalize:
+            df['SMILES'] = df["SMILES"].apply(lambda x: get_cansmiles(x))
+
+        # Remove empty SMILES
+        df = df[df['SMILES'].str.len() > 0]
 
         # Filter if requested
         if filter_:

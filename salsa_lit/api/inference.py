@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import yaml
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, default_collate
 from tqdm import tqdm
 
 from salsa_lit.config import ModelConfig
@@ -20,6 +20,32 @@ from salsa_lit.data.tokenizer import SMILESTokenizer
 from salsa_lit.data.datasets import InferenceDataset
 from salsa_lit.utils.chemistry import get_cansmiles
 from salsa_lit.utils.io import read_ds, write_embeddings
+
+
+def trim_collate(items: List[dict]) -> dict:
+    """
+    Collate a batch and drop the trailing padding shared by every member.
+
+    Parameters
+    ----------
+    items : list of dict
+        Samples from InferenceDataset
+
+    Returns
+    -------
+    batch : dict
+        Collated batch with 'seq', 'pad_mask' and 'avg_mask' trimmed to the
+        longest unpadded sequence in the batch. 'out_mask' is per-token and
+        so is left as-is.
+    """
+    batch = default_collate(items)
+
+    keep = int((~batch['pad_mask']).sum(dim=1).max())
+    batch['seq'] = batch['seq'][:, :keep]
+    batch['pad_mask'] = batch['pad_mask'][:, :keep]
+    batch['avg_mask'] = batch['avg_mask'][:, :keep]
+
+    return batch
 
 
 def load_model(path: str, map_location: str = None) -> SalsaNet:
@@ -127,15 +153,19 @@ def serve_salsa(
         df = df.copy()
         df['SMILES'] = df['SMILES'].apply(get_cansmiles)
         unusable = (df['SMILES'].str.contains('.', regex=False)
-                    | (df['SMILES'].str.len() > MAX_SMI_LEN))
+                    | (df['SMILES'].str.len() > MAX_SMI_LEN)
+                    | (df['SMILES'].str.len() == 0))
         if unusable.any():
-            print(f"Dropping {unusable.sum()} multi-fragment or over-length SMILES")
+            print(f"Dropping {unusable.sum()} multi-fragment, over-length or "
+                  f"unparseable SMILES")
             df = df[~unusable]
 
     # Create dataset and loader
     tokenizer = SMILESTokenizer()
-    dataset = InferenceDataset(df, tokenizer=tokenizer, filter_=False)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, drop_last=False)
+    dataset = InferenceDataset(df, tokenizer=tokenizer, filter_=False,
+                               canonicalize=not filter_input)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False,
+                        drop_last=False, collate_fn=trim_collate)
 
     # Run inference
     all_embeddings = []

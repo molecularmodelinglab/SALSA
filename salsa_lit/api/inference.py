@@ -2,7 +2,6 @@
 High-level inference API for SALSA.
 """
 
-import os
 from typing import Union, List, Tuple
 from datetime import datetime
 
@@ -20,6 +19,7 @@ from salsa_lit.lightning.salsa_module import SalsaLightningModule
 from salsa_lit.data.tokenizer import SMILESTokenizer
 from salsa_lit.data.datasets import InferenceDataset
 from salsa_lit.utils.chemistry import get_cansmiles
+from salsa_lit.utils.io import read_ds, write_embeddings
 
 
 def load_model(path: str, map_location: str = None) -> SalsaNet:
@@ -51,6 +51,7 @@ def serve_salsa(
     batch_size: int = 50,
     device: str = None,
     filter_input: bool = False,
+    fmt: str = None,
 ) -> Tuple[np.ndarray, List[str]]:
     """
     Generate SALSA embeddings for a set of SMILES.
@@ -59,7 +60,7 @@ def serve_salsa(
     ----------
     smiles : str or pd.DataFrame or List[str]
         Input SMILES. Can be:
-        - Path to CSV/PARQUET file with 'SMILES' column
+        - Path to a parquet or CSV file with a 'SMILES' column
         - DataFrame with 'SMILES' column
         - List of SMILES strings
     model : str or SalsaNet or SalsaLightningModule
@@ -68,7 +69,8 @@ def serve_salsa(
         - SalsaNet model object
         - SalsaLightningModule object
     output_file : str, optional
-        Path to save embeddings CSV. If None, results are only returned.
+        Path to save embeddings to. If None, results are only returned.
+        A '.csv' extension writes CSV, otherwise parquet is used.
     batch_size : int
         Batch size for inference
     device : str, optional
@@ -77,6 +79,9 @@ def serve_salsa(
     filter_input : bool
         Screen out inputs the model cannot embed (multi-fragment SMILES, or
         SMILES longer than MAX_SMI_LEN).
+    fmt : str, optional
+        Output format ('parquet' or 'csv') when `output_file` has no
+        recognised extension. Defaults to parquet.
 
     Returns
     -------
@@ -113,10 +118,7 @@ def serve_salsa(
     if isinstance(smiles, list):
         df = pd.DataFrame({'SMILES': smiles})
     elif isinstance(smiles, str):
-        if smiles.endswith('.parquet'):
-            df = pd.read_parquet(smiles, columns=['SMILES'])
-        else:
-            df = pd.read_csv(smiles, usecols=['SMILES'])
+        df = read_ds(smiles, columns=['SMILES'])
     else:
         df = smiles
 
@@ -157,21 +159,7 @@ def serve_salsa(
 
     # Save if output file specified
     if output_file is not None:
-        output_dir = os.path.dirname(output_file)
-        if output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-
-        with open(output_file, 'w') as f:
-            # Write header
-            dim_salsa = embeddings.shape[1]
-            header = 'SMILES,' + ','.join([f'dim_{i}' for i in range(dim_salsa)])
-            f.write(header + '\n')
-
-            # Write data
-            for i, smi in enumerate(all_smiles):
-                emb_str = ','.join(map(str, embeddings[i]))
-                f.write(f"{smi},{emb_str}\n")
-
+        write_embeddings(output_file, all_smiles, embeddings, fmt=fmt)
         print(f"Saved embeddings to {output_file}")
 
     return embeddings, all_smiles

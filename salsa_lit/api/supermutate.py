@@ -10,7 +10,7 @@ import pandas as pd
 from salsa_lit.config import SuperMutantConfig
 from salsa_lit.data.mutation import filter_source_ds
 from salsa_lit.data.supermutation import supermutate_data
-from salsa_lit.utils.io import read_ds, timestamp
+from salsa_lit.utils.io import DEFAULT_FORMAT, read_ds, timestamp, with_ext
 
 
 def supermutate_dataset(
@@ -20,6 +20,7 @@ def supermutate_dataset(
     n_samp: int = -1,
     n_jobs: int = 1,
     use_tqdm: bool = True,
+    fmt: str = None,
 ) -> Tuple[pd.DataFrame, str]:
     """
     Create a SALSA supermutant dataset for evaluation.
@@ -29,7 +30,8 @@ def supermutate_dataset(
     smiles_file : str or pd.DataFrame
         Input SMILES data. Must have a 'SMILES' column; 'ID' is used if given.
     output_file : str, optional
-        Output CSV path. If None, generates a timestamped name in cwd.
+        Output path. If None, generates a timestamped name in cwd. A '.csv'
+        extension writes CSV, otherwise parquet is used.
     config : SuperMutantConfig, optional
         Supermutant configuration (uses defaults if None).
     n_samp : int
@@ -38,6 +40,9 @@ def supermutate_dataset(
         Worker processes to use.
     use_tqdm : bool
         Show progress bar.
+    fmt : str, optional
+        Output format ('parquet' or 'csv') used when the output name is
+        generated or has no recognised extension. Defaults to parquet.
 
     Returns
     -------
@@ -64,10 +69,10 @@ def supermutate_dataset(
         acts = ''.join(a[0] for a in config.actions)
         output_file = os.path.join(
             os.getcwd(),
-            f'supermutants_{timestamp()}_{n_ancs}-ancs_'
-            f'{config.depth}-depth_{config.n_branches}-branches_'
-            f'{config.mahala_thresh}-mthresh_{config.weight}-weight_'
-            f'{acts}-acts.csv'
+            with_ext(f'supermutants_{timestamp()}_{n_ancs}-ancs_'
+                     f'{config.depth}-depth_{config.n_branches}-branches_'
+                     f'{config.mahala_thresh}-mthresh_{config.weight}-weight_'
+                     f'{acts}-acts', fmt or DEFAULT_FORMAT)
         )
     out_dir, out_name = os.path.split(output_file)
 
@@ -83,6 +88,7 @@ def supermutate_dataset(
         weight=config.weight,
         n_jobs=n_jobs,
         use_tqdm=use_tqdm,
+        fmt=fmt,
     )
 
     return df, output_file
@@ -97,6 +103,7 @@ def prepare_supermutant_data(
     max_len: int = 100,
     max_atoms: int = 35,
     n_jobs: int = 1,
+    fmt: str = None,
 ) -> Tuple[pd.DataFrame, str]:
     """
     Full pipeline to prepare supermutant evaluation data from raw SMILES.
@@ -124,6 +131,8 @@ def prepare_supermutant_data(
         Maximum number of atoms for filtering.
     n_jobs : int
         Worker processes to use.
+    fmt : str, optional
+        Output format ('parquet' or 'csv'). Defaults to parquet.
 
     Returns
     -------
@@ -146,10 +155,13 @@ def prepare_supermutant_data(
 
     n_ancs = len(df) if n_samp < 0 else min(n_samp, len(df))
     acts = ''.join(a[0] for a in config.actions)
-    output_name = (f'supermutants_{timestamp()}_{n_ancs}-ancs_'
-                   f'{config.depth}-depth_{config.n_branches}-branches_'
-                   f'{config.mahala_thresh}-mthresh_{config.weight}-weight_'
-                   f'{acts}-acts.csv')
+    output_name = with_ext(
+        f'supermutants_{timestamp()}_{n_ancs}-ancs_'
+        f'{config.depth}-depth_{config.n_branches}-branches_'
+        f'{config.mahala_thresh}-mthresh_{config.weight}-weight_'
+        f'{acts}-acts',
+        fmt or DEFAULT_FORMAT
+    )
     output_path = os.path.join(output_dir, output_name)
 
     result_df = supermutate_data(
@@ -164,6 +176,7 @@ def prepare_supermutant_data(
         weight=config.weight,
         n_jobs=n_jobs,
         use_tqdm=True,
+        fmt=fmt,
     )
 
     return result_df, output_path

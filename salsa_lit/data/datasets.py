@@ -20,7 +20,7 @@ class InferenceDataset(Dataset):
     Parameters
     ----------
     ds : str or pd.DataFrame
-        Dataframe of SMILES or path to CSV file.
+        Dataframe of SMILES or path to a parquet or CSV file.
         Must have a 'SMILES' column.
     tokenizer : SMILESTokenizer, optional
         Tokenizer for SMILES conversion. Created if not provided.

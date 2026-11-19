@@ -20,8 +20,24 @@ from salsa_lit.constants import (
     ATOM_TO_CNT, MAHALA_THRESH, N_MUTS, MAX_ANC_LEN, MAX_MUT_LEN,
     ATOMS, ACTIONS, get_prop_names, get_inv_cov_chembl
 )
-from salsa_lit.utils.io import read_ds, timestamp
+from salsa_lit.utils.io import (
+    ChunkWriter, DEFAULT_FORMAT, dataset_paths, infer_format, read_ds,
+    timestamp, with_ext, write_ds
+)
 from salsa_lit.utils.chemistry import get_props, get_cansmiles, count_atoms
+
+
+MUT_COLS = ['Is_anc', 'Anc_id', 'SMILES', 'Action', 'At_atom', 'To_atom',
+            'Prop_dist']
+
+MUT_DTYPES = {
+    'Is_anc': 'bool',
+    'SMILES': 'str',
+    'Action': 'str',
+    'At_atom': 'int64',
+    'To_atom': 'str',
+    'Prop_dist': 'float64',
+}
 
 
 # Lazy-load constants at module level for backward compatibility
@@ -124,7 +140,8 @@ def mutate_data(
     actions: List[str] = ACTIONS,
     mahala_thresh: float = MAHALA_THRESH,
     weight: str = 'chembl',
-    use_tqdm: bool = False
+    use_tqdm: bool = False,
+    fmt: str = None
 ) -> pd.DataFrame:
     """
     Mutate a dataset to create SALSA training data.
@@ -135,9 +152,10 @@ def mutate_data(
     Parameters
     ----------
     ds : pd.DataFrame or str
-        DataFrame (or path to CSV) with SMILES and ID columns
+        DataFrame (or path to a parquet or CSV file) with SMILES and ID columns
     out_name : str, optional
-        Output filename. Defaults to timestamped name.
+        Output filename. Defaults to a timestamped name. A '.csv' extension
+        writes CSV, otherwise parquet is used.
     out_dir : str, optional
         Output directory. Defaults to cwd.
     n_samp : int
@@ -152,6 +170,9 @@ def mutate_data(
         Weighting scheme: 'uniform' or 'chembl'
     use_tqdm : bool
         Show progress bar
+    fmt : str, optional
+        Output format ('parquet' or 'csv') used when the output name is
+        generated or has no recognised extension. Defaults to parquet.
 
     Returns
     -------
@@ -172,75 +193,76 @@ def mutate_data(
 
     # Set outputs
     if out_name is None:
-        out_name = f'mutants_{timestamp()}_{n_samp}-ancs_{num_muts}-muts_{mahala_thresh}-mthresh_{weight}-weight.csv'
+        out_name = with_ext(
+            f'mutants_{timestamp()}_{n_samp}-ancs_{num_muts}-muts_'
+            f'{mahala_thresh}-mthresh_{weight}-weight',
+            fmt or DEFAULT_FORMAT
+        )
     if out_dir is None:
         out_dir = os.getcwd()
     out_file = os.path.join(out_dir, out_name)
-    os.makedirs(os.path.dirname(out_file) or '.', exist_ok=True)
+    fmt = infer_format(out_file, default=fmt or DEFAULT_FORMAT)
 
-    # Write header
-    with open(out_file, 'w') as f:
-        f.write(",".join(['Is_anc', 'Anc_id', 'SMILES', 'Action', 'At_atom', 'To_atom', 'Prop_dist']) + "\n")
+    dtypes = {**MUT_DTYPES, 'Anc_id': df['ID'].dtype}
 
     # Process mutants for each SMILES
     rows = []
-    for row in tqdm(df.values, total=len(df), disable=not use_tqdm):
-        anc_id = row[0]
-        anc_smi = row[1]
-        mut_tups, _, failed = _get_muts_from_anc(
-            anc_smi, num_muts=num_muts, actions=actions, weight=weight,
-            mahala_thresh=mahala_thresh, max_mut_len=MAX_MUT_LEN
-        )
-        if failed:
-            continue
-        else:
-            muts = [[False, anc_id, *x] for x in mut_tups]
-            with open(out_file, 'a') as f:
-                rows.append([True, anc_id, anc_smi, 'None', -1, 'None', -1])
-                f.write(",".join([str(_) for _ in [True, anc_id, anc_smi, 'None', -1, 'None', -1]]) + "\n")
+    with ChunkWriter(out_file, MUT_COLS, fmt=fmt, dtypes=dtypes) as writer:
+        for row in tqdm(df.values, total=len(df), disable=not use_tqdm):
+            anc_id = row[0]
+            anc_smi = row[1]
+            mut_tups, _, failed = _get_muts_from_anc(
+                anc_smi, num_muts=num_muts, actions=actions, weight=weight,
+                mahala_thresh=mahala_thresh, max_mut_len=MAX_MUT_LEN
+            )
+            if failed:
+                continue
+            else:
+                fam = [[True, anc_id, anc_smi, 'None', -1, 'None', -1]]
+                fam += [[False, anc_id, *x] for x in mut_tups]
+                writer.write(fam)
+                rows.extend(fam)
 
-                for mut in muts:
-                    f.write(",".join([str(_) for _ in mut]) + "\n")
-                    rows.append(mut)
-
-    cols = ['Is_anc', 'Anc_id', 'SMILES', 'Action', 'At_atom', 'To_atom', 'Prop_dist']
-    df_out = pd.DataFrame(rows, columns=cols)
+    df_out = pd.DataFrame(rows, columns=MUT_COLS)
 
     return df_out
 
 
-def consolidate_mut_ds_chunks(work_path: str, out_path: str = None) -> str:
+def consolidate_mut_ds_chunks(work_path: str, out_path: str = None,
+                              fmt: str = None) -> str:
     """
     Merge multiple mutation datasets into a single training dataset.
 
     Parameters
     ----------
     work_path : str
-        Directory containing mutation datasets to merge
+        Directory containing mutation datasets to merge. Parquet and CSV
+        chunks may be mixed.
     out_path : str, optional
         Output path for merged dataset
+    fmt : str, optional
+        Output format ('parquet' or 'csv') used when `out_path` is generated
+        or has no recognised extension. Defaults to parquet.
 
     Returns
     -------
     out_path : str
         Path to merged dataset
     """
-    import glob
-
     if out_path is None:
-        out_path = os.path.join(os.getcwd(), timestamp() + "_merged_mutated_datasets.csv")
-
-    csv_names = f'{work_path}/*.csv'
-    csv_files = glob.glob(csv_names)
+        out_path = os.path.join(
+            os.getcwd(),
+            with_ext(timestamp() + "_merged_mutated_datasets",
+                     fmt or DEFAULT_FORMAT)
+        )
 
     df_list = []
-    for fname in csv_files:
-        subdf = pd.read_csv(fname)
-        df_list.append(subdf)
+    for fname in dataset_paths(work_path):
+        df_list.append(read_ds(fname))
 
     df = pd.concat(df_list, axis=0, ignore_index=True)
     df = df.sort_values(by=['Anc_id', 'Is_anc'], ascending=[True, False])
-    df.to_csv(out_path, index=False, na_rep='None')
+    write_ds(df, out_path, fmt=fmt)
 
     return out_path
 

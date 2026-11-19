@@ -18,7 +18,9 @@ from salsa_lit.constants import (
     ACTIONS, MAHALA_THRESH, MAX_MUT_LEN, WEIGHT,
 )
 from salsa_lit.data.mutation import _get_muts_from_anc, _is_real_mol
-from salsa_lit.utils.io import read_ds, timestamp
+from salsa_lit.utils.io import (
+    DEFAULT_FORMAT, dataset_paths, read_ds, timestamp, with_ext, write_ds
+)
 
 
 SUPERMUT_COLS = [
@@ -39,6 +41,7 @@ def supermutate_data(
     weight: str = WEIGHT,
     n_jobs: int = 1,
     use_tqdm: bool = False,
+    fmt: str = None,
 ) -> pd.DataFrame:
     """
     Build a supermutant dataset from a set of anchor molecules.
@@ -46,10 +49,12 @@ def supermutate_data(
     Parameters
     ----------
     ds : pd.DataFrame or str
-        DataFrame (or path to CSV) with a 'SMILES' column. An 'ID' column is
-        used if present, otherwise anchors are numbered from 0.
+        DataFrame (or path to a parquet or CSV file) with a 'SMILES' column.
+        An 'ID' column is used if present, otherwise anchors are numbered
+        from 0.
     out_name : str, optional
-        Output filename. Defaults to a timestamped name.
+        Output filename. Defaults to a timestamped name. A '.csv' extension
+        writes CSV, otherwise parquet is used.
     out_dir : str, optional
         Output directory. Defaults to cwd.
     n_samp : int
@@ -69,6 +74,9 @@ def supermutate_data(
         Worker processes. 1 runs in the calling process.
     use_tqdm : bool
         Show a progress bar.
+    fmt : str, optional
+        Output format ('parquet' or 'csv') used when the output name is
+        generated or has no recognised extension. Defaults to parquet.
 
     Returns
     -------
@@ -106,9 +114,12 @@ def supermutate_data(
 
     if out_name is None:
         acts = ''.join(a[0] for a in actions)
-        out_name = (f'supermutants_{timestamp()}_{len(anchors)}-ancs_'
-                    f'{depth}-depth_{n_branches}-branches_{mahala_thresh}-mthresh_'
-                    f'{weight}-weight_{acts}-acts.csv')
+        out_name = with_ext(
+            f'supermutants_{timestamp()}_{len(anchors)}-ancs_'
+            f'{depth}-depth_{n_branches}-branches_{mahala_thresh}-mthresh_'
+            f'{weight}-weight_{acts}-acts',
+            fmt or DEFAULT_FORMAT
+        )
     if out_dir is None:
         out_dir = os.getcwd()
     os.makedirs(out_dir, exist_ok=True)
@@ -132,7 +143,7 @@ def supermutate_data(
                 branches.extend(fut.result())
 
     df_out = _assemble(branches)
-    df_out.to_csv(out_file, index=False, na_rep='None')
+    write_ds(df_out, out_file, fmt=fmt)
 
     n_anc = df_out['Anc_id'].nunique() if len(df_out) else 0
     print(f"Supermutants: {len(df_out)} compounds from {n_anc} anchors "
@@ -145,36 +156,41 @@ def supermutate_data(
     return df_out
 
 
-def consolidate_supmut_chunks(work_path: str, out_path: str = None) -> str:
+def consolidate_supmut_chunks(work_path: str, out_path: str = None,
+                              fmt: str = None) -> str:
     """
-    Merge supermutant CSV chunks into one dataset, renumbering IDs.
+    Merge supermutant chunks into one dataset, renumbering IDs.
 
     Parameters
     ----------
     work_path : str
-        Directory of supermutant CSVs to merge.
+        Directory of supermutant datasets to merge. Parquet and CSV chunks
+        may be mixed.
     out_path : str, optional
         Output path for the merged dataset.
+    fmt : str, optional
+        Output format ('parquet' or 'csv') used when `out_path` is generated
+        or has no recognised extension. Defaults to parquet.
 
     Returns
     -------
     out_path : str
         Path to the merged dataset.
     """
-    import glob
-
     if out_path is None:
-        out_path = os.path.join(os.getcwd(),
-                                f'supermutants_merged_{timestamp()}.csv')
+        out_path = os.path.join(
+            os.getcwd(),
+            with_ext(f'supermutants_merged_{timestamp()}', fmt or DEFAULT_FORMAT)
+        )
 
-    csv_files = sorted(glob.glob(os.path.join(work_path, '*.csv')))
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV files found in {work_path}")
+    chunk_files = dataset_paths(work_path)
+    if not chunk_files:
+        raise FileNotFoundError(f"No parquet or CSV files found in {work_path}")
 
     dfs = []
     anc_offset = 0
-    for fname in csv_files:
-        sub = pd.read_csv(fname)
+    for fname in chunk_files:
+        sub = read_ds(fname)
         # Anc_id is only unique within a chunk, so shift each chunk into its
         # own range before concatenating.
         sub['Anc_id'] = sub['Anc_id'] + anc_offset
@@ -186,7 +202,7 @@ def consolidate_supmut_chunks(work_path: str, out_path: str = None) -> str:
     df = df.reset_index(drop=True)
     df['ID'] = df.index
 
-    df.to_csv(out_path, index=False, na_rep='None')
+    write_ds(df, out_path, fmt=fmt)
     return out_path
 
 

@@ -22,7 +22,7 @@ class SalsaDataModule(L.LightningDataModule):
     Parameters
     ----------
     train_data : str or pd.DataFrame
-        Path to training data CSV or DataFrame
+        Path to training data (parquet or CSV) or DataFrame
     batch_size : int
         Batch size for training
     num_workers : int

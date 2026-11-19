@@ -10,7 +10,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from salsa_lit.config import DataConfig
-from salsa_lit.utils.io import read_ds, timestamp
+from salsa_lit.utils.io import DEFAULT_FORMAT, read_ds, timestamp, with_ext
 from salsa_lit.data.mutation import mutate_data, filter_source_ds
 
 
@@ -20,6 +20,7 @@ def mutate_dataset(
     data_config: DataConfig = None,
     n_samp: int = -1,
     use_tqdm: bool = True,
+    fmt: str = None,
 ) -> Tuple[pd.DataFrame, str]:
     """
     Create a SALSA training dataset by mutating molecules.
@@ -29,13 +30,17 @@ def mutate_dataset(
     smiles_file : str or pd.DataFrame
         Input SMILES data. Must have 'SMILES' and 'ID' columns.
     output_file : str, optional
-        Output CSV path. If None, generates timestamped name.
+        Output path. If None, generates a timestamped name. A '.csv'
+        extension writes CSV, otherwise parquet is used.
     data_config : DataConfig, optional
         Data configuration with mutation parameters.
     n_samp : int
         Number of molecules to sample (-1 for all)
     use_tqdm : bool
         Show progress bar
+    fmt : str, optional
+        Output format ('parquet' or 'csv') used when the output name is
+        generated or has no recognised extension. Defaults to parquet.
 
     Returns
     -------
@@ -61,7 +66,8 @@ def mutate_dataset(
         n_ancs = n_samp if n_samp > 0 else 'all'
         output_file = os.path.join(
             os.getcwd(),
-            f'mutants_{timestamp()}_{n_ancs}-ancs_{data_config.n_muts}-muts.csv'
+            with_ext(f'mutants_{timestamp()}_{n_ancs}-ancs_'
+                     f'{data_config.n_muts}-muts', fmt or DEFAULT_FORMAT)
         )
     out_dir, out_name = os.path.split(output_file)
 
@@ -75,7 +81,8 @@ def mutate_dataset(
         actions=data_config.actions,
         mahala_thresh=data_config.mahala_thresh,
         weight=data_config.weight,
-        use_tqdm=use_tqdm
+        use_tqdm=use_tqdm,
+        fmt=fmt
     )
 
     return df, output_file
@@ -89,6 +96,7 @@ def prepare_training_data(
     filter_data: bool = True,
     max_len: int = 100,
     max_atoms: int = 35,
+    fmt: str = None,
 ) -> Tuple[pd.DataFrame, str]:
     """
     Full pipeline to prepare training data from raw SMILES.
@@ -114,6 +122,8 @@ def prepare_training_data(
         Maximum SMILES length for filtering
     max_atoms : int
         Maximum number of atoms for filtering
+    fmt : str, optional
+        Output format ('parquet' or 'csv'). Defaults to parquet.
 
     Returns
     -------
@@ -138,7 +148,12 @@ def prepare_training_data(
     os.makedirs(output_dir, exist_ok=True)
 
     ts = timestamp()
-    output_name = f'mutants_{ts}_{len(df) if n_samp < 0 else n_samp}-ancs_{data_config.n_muts}-muts_{data_config.mahala_thresh}-mthresh_{data_config.weight}-weight.csv'
+    output_name = with_ext(
+        f'mutants_{ts}_{len(df) if n_samp < 0 else n_samp}-ancs_'
+        f'{data_config.n_muts}-muts_{data_config.mahala_thresh}-mthresh_'
+        f'{data_config.weight}-weight',
+        fmt or DEFAULT_FORMAT
+    )
     output_path = os.path.join(output_dir, output_name)
 
     # Run mutation
@@ -151,7 +166,8 @@ def prepare_training_data(
         actions=data_config.actions,
         mahala_thresh=data_config.mahala_thresh,
         weight=data_config.weight,
-        use_tqdm=True
+        use_tqdm=True,
+        fmt=fmt
     )
 
     return result_df, output_path

@@ -11,6 +11,37 @@ import argparse
 import sys
 
 
+def resolve_output_format(output, fmt_flag):
+    """
+    Settle the output format from an explicit output path and --format.
+
+    Parameters
+    ----------
+    output : str or None
+        Explicit output path, if one was given
+    fmt_flag : str or None
+        Value of --format, or None if it was not passed
+
+    Returns
+    -------
+    fmt : str
+        'parquet' or 'csv'
+    """
+    from salsa_lit.utils.io import DEFAULT_FORMAT, infer_format
+
+    if output:
+        by_ext = infer_format(output, default=None)
+        if by_ext is not None:
+            if fmt_flag is not None and by_ext != fmt_flag:
+                raise SystemExit(
+                    f"salsa-lit: error: --format {fmt_flag} conflicts with the "
+                    f"extension of {output} (reads as {by_ext})"
+                )
+            return by_ext
+
+    return fmt_flag or DEFAULT_FORMAT
+
+
 def train_command(args):
     """Train a SALSA model."""
     from salsa_lit.config import ModelConfig, TrainingConfig
@@ -63,6 +94,7 @@ def embed_command(args):
         batch_size=args.batch_size,
         device=args.device,
         filter_input=args.filter,
+        fmt=resolve_output_format(args.output, args.format),
     )
 
     print(f"Generated {len(embeddings)} embeddings of dimension {embeddings.shape[1]}")
@@ -89,6 +121,7 @@ def mutate_command(args):
         filter_data=not args.no_filter,
         max_len=args.max_len,
         max_atoms=args.max_atoms,
+        fmt=resolve_output_format(None, args.format),
     )
 
     print(f"Created mutated dataset with {len(df)} samples")
@@ -116,6 +149,7 @@ def supermutate_command(args):
         max_len=args.max_len,
         max_atoms=args.max_atoms,
         n_jobs=args.n_jobs,
+        fmt=resolve_output_format(None, args.format),
     )
 
     print(f"Created supermutant dataset with {len(df)} compounds")
@@ -131,13 +165,12 @@ def main(argv=None):
 
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
 
-    # =========================================================================
-    # Train command
-    # =========================================================================
+    ### Train command
     train_parser = subparsers.add_parser('train', help='Train a SALSA model')
-    train_parser.add_argument('train_data', help='Path to training CSV with mutated molecules')
+    train_parser.add_argument('train_data',
+                              help='Path to training parquet/CSV with mutated molecules')
     train_parser.add_argument('-o', '--output-dir', help='Output directory for model')
-    train_parser.add_argument('--val-data', help='Path to validation CSV')
+    train_parser.add_argument('--val-data', help='Path to validation parquet/CSV')
     train_parser.add_argument('--n-samp', type=int, default=-1, help='Number of families to sample')
 
     # Model architecture
@@ -165,25 +198,26 @@ def main(argv=None):
     train_parser.add_argument('--resume', metavar='CKPT_PATH', default=None,
                                help='Path to checkpoint to resume training from (e.g. last.ckpt)')
 
-    # =========================================================================
-    # Embed command
-    # =========================================================================
+    ### Embed command
     embed_parser = subparsers.add_parser('embed', help='Generate embeddings for molecules')
-    embed_parser.add_argument('input', help='Input SMILES (CSV file or comma-separated)')
+    embed_parser.add_argument('input', help='Input SMILES (parquet or CSV file)')
     embed_parser.add_argument('-m', '--model', required=True, help='Path to trained model')
-    embed_parser.add_argument('-o', '--output', help='Output CSV for embeddings')
+    embed_parser.add_argument('-o', '--output', help='Output file for embeddings')
+    embed_parser.add_argument('--format', choices=['parquet', 'csv'], default=None,
+                              help='Output format (default: parquet). An extension '
+                                   'on --output takes precedence.')
     embed_parser.add_argument('--batch-size', type=int, default=50, help='Inference batch size')
     embed_parser.add_argument('--device', help='Device (cpu, cuda, cuda:0, etc.)')
     embed_parser.add_argument('--filter', action='store_true',
                               help='Drop multi-fragment or over-length SMILES instead of '
                                    'erroring on them (costs a canonicalization pass)')
 
-    # =========================================================================
-    # Mutate command
-    # =========================================================================
+    ### Mutate command
     mutate_parser = subparsers.add_parser('mutate', help='Create mutated dataset for training')
-    mutate_parser.add_argument('input', help='Input CSV with SMILES and ID columns')
+    mutate_parser.add_argument('input', help='Input parquet or CSV with SMILES and ID columns')
     mutate_parser.add_argument('-o', '--output-dir', help='Output directory')
+    mutate_parser.add_argument('--format', choices=['parquet', 'csv'], default=None,
+                               help='Output format (default: parquet)')
     mutate_parser.add_argument('--n-samp', type=int, default=-1, help='Number of molecules to sample')
     mutate_parser.add_argument('--n-muts', type=int, default=5, help='Mutations per molecule')
     mutate_parser.add_argument('--mahala-thresh', type=float, default=6.0, help='Mahalanobis threshold')
@@ -193,14 +227,14 @@ def main(argv=None):
     mutate_parser.add_argument('--max-len', type=int, default=120, help='Max SMILES length')
     mutate_parser.add_argument('--max-atoms', type=int, default=35, help='Max number of atoms')
 
-    # =========================================================================
-    # Supermutate command
-    # =========================================================================
+    ### Supermutate command
     sup_parser = subparsers.add_parser(
         'supermutate',
         help='Create supermutant dataset (chains of successive edits) for evaluation')
-    sup_parser.add_argument('input', help='Input CSV with SMILES and ID columns')
+    sup_parser.add_argument('input', help='Input parquet or CSV with SMILES and ID columns')
     sup_parser.add_argument('-o', '--output-dir', help='Output directory')
+    sup_parser.add_argument('--format', choices=['parquet', 'csv'], default=None,
+                            help='Output format (default: parquet)')
     sup_parser.add_argument('--n-samp', type=int, default=-1, help='Number of anchors to sample')
     sup_parser.add_argument('--depth', type=int, default=5,
                             help='Max GED depth; one compound per depth 1..N')
@@ -215,9 +249,7 @@ def main(argv=None):
     sup_parser.add_argument('--max-len', type=int, default=120, help='Max SMILES length')
     sup_parser.add_argument('--max-atoms', type=int, default=35, help='Max number of atoms')
 
-    # =========================================================================
-    # Parse and dispatch
-    # =========================================================================
+    ### Parse and dispatch
     args = parser.parse_args(argv)
 
     if args.command is None:

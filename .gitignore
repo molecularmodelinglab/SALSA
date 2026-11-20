@@ -1,0 +1,16 @@
+__pycache__/
+.venv/
+.vscode/
+*egg-info/
+training_runs/
+*.out
+slurm-*
+scratch*
+/data/diversity_data/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+lightning_logs/
+.ipynb_checkpoints/

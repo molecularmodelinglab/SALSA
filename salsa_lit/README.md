@@ -8,8 +8,8 @@ A refactored, modular implementation of SALSA with PyTorch Lightning support for
 
 ```bash
 # Clone the repository
-git clone https://github.com/molecularmodelinglab/SALSA_WIP.git
-cd SALSA_WIP
+git clone https://github.com/molecularmodelinglab/SALSA.git
+cd SALSA
 
 # Install dependencies and package
 pip install -r requirements.txt

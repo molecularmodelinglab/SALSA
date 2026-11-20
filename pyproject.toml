@@ -64,7 +64,7 @@ dev = [
 salsa-lit = "salsa_lit.cli.main:main"
 
 [project.urls]
-Repository = "https://github.com/molecularmodelinglab/SALSA_WIP"
+Repository = "https://github.com/molecularmodelinglab/SALSA"
 
 [tool.setuptools.packages.find]
 include = ["salsa_lit*"]

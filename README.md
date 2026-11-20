@@ -1,20 +1,16 @@
-# SALSA
-
-Structurally-Aware Latent Space Autoencoder for molecular embeddings.
-
 ## Installation
 
 Requires Python 3.11 or newer.
 
 ```bash
-pip install git+https://github.com/molecularmodelinglab/SALSA_WIP.git
+pip install git+https://github.com/molecularmodelinglab/SALSA.git
 ```
 
 To work on the code instead:
 
 ```bash
-git clone https://github.com/molecularmodelinglab/SALSA_WIP.git
-cd SALSA_WIP
+git clone https://github.com/molecularmodelinglab/SALSA.git
+cd SALSA
 pip install -e ".[dev]"
 ```
 

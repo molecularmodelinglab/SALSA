@@ -124,7 +124,7 @@ def serve_salsa(
     ...     model="./my_model/"
     ... )
     >>> print(embeddings.shape)
-    (3, 32)
+    (3, 16)
     """
     # Set up device
     if device is None:

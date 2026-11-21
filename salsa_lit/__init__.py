@@ -1,5 +1,5 @@
 """
-SALSA - Structurally-Aware Latent Space Autoencoder
+SALSA - Semantically-Aware Latent Space Autoencoder
 
 A transformer-based model for molecular embeddings using contrastive learning.
 """

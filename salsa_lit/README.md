@@ -1,32 +1,19 @@
-# SALSA-Lit: Structurally-Aware Latent Space Autoencoder
+# salsa_lit
 
-A refactored, modular implementation of SALSA with PyTorch Lightning support for multi-GPU training.
+Python API and command line reference. See the [main README](../README.md) for
+installation and a quick start.
 
-## Installation
+## Python API
 
-### From source (recommended)
-
-```bash
-# Clone the repository
-git clone https://github.com/molecularmodelinglab/SALSA.git
-cd SALSA
-
-# Install dependencies and package
-pip install -r requirements.txt
-pip install -e .
-```
-
-## Quick Start
-
-### Training a Model
+### Training
 
 ```python
 from salsa_lit import cook_salsa, ModelConfig, TrainingConfig
 
-# Train with default settings
-model, trainer = cook_salsa("training_data.csv", save_dir="./checkpoints/model_default")
+model, trainer = cook_salsa("training_data.parquet", save_dir="run/")
+```
 
-# Train with custom config
+```python
 model_config = ModelConfig(
     dim_salsa=64,      # Embedding dimension
     dim_emb=512,       # Transformer hidden dim
@@ -39,168 +26,124 @@ training_config = TrainingConfig(
     n_epochs=30,
     batch_size=50,     # Families per batch
     lr=0.00001,
-    devices=4,         # Multi-GPU support!
+    devices=4,         # DDP across 4 GPUs
     accelerator='gpu',
+    precision='bf16-mixed',
 )
 
 model, trainer = cook_salsa(
-    "training_data.csv",
-    save_dir="./checkpoints/model_custom",
+    "training_data.parquet",
+    save_dir="run/",
     model_config=model_config,
     training_config=training_config,
+    val_csv="validation_data.parquet",
 )
 ```
 
-### Generating Embeddings
+Multi-GPU training runs through Lightning's DDP; set `devices` to the number of
+GPUs and leave the rest alone.
+
+### Generating embeddings
 
 ```python
-from salsa_lit import serve_salsa
+from salsa_lit import serve_salsa, load_model
 
-# From SMILES list
-embeddings, smiles = serve_salsa(
-    ["CCO", "CC(=O)O", "c1ccccc1"],
-    model="./checkpoints/model_default/",
-)
+embeddings, smiles = serve_salsa(["CCO", "CC(=O)O", "c1ccccc1"], model="run/")
 
-# From CSV file
 embeddings, smiles = serve_salsa(
-    "molecules.csv",
-    model="./checkpoints/model_default/",
-    output_file="embeddings.csv",
+    "molecules.parquet",
+    model="run/",
+    output_file="embeddings.parquet",
+    batch_size=50,
+    filter_input=True,   # drop multi-fragment, over-length and unparseable input
 )
 ```
 
-### Creating Training Data (Mutation)
+`serve_salsa` returns embeddings in input order, one row per molecule, and
+writes `SMILES` plus one `dim_*` column per dimension. A model may be a path, a
+`SalsaNet`, or a `SalsaLightningModule`; `load_model` loads one explicitly.
+
+### Creating training data
 
 ```python
 from salsa_lit import mutate_dataset, DataConfig
 
-data_config = DataConfig(
-    n_muts=5,           # Mutations per anchor
-    mahala_thresh=6.0,  # Mahalanobis threshold
-    weight='chembl',    # Weighting scheme
-)
-
 df, path = mutate_dataset(
-    "source_molecules.csv",
-    output_file="training_data.csv",
-    data_config=data_config,
+    "source_molecules.parquet",
+    output_file="training_data.parquet",
+    data_config=DataConfig(n_muts=5, mahala_thresh=6.0, weight='chembl'),
 )
 ```
 
-## Command Line Interface
-
-After installation, the `salsa-lit` command is available:
-
-```bash
-# Train a model
-salsa-lit train training_data.csv -o ./checkpoints/model_default --epochs 30 --devices 4
-
-# Generate embeddings
-salsa-lit embed molecules.csv -m ./checkpoints/model_default -o embeddings.csv
-
-# Create training data (mutation)
-salsa-lit mutate source_molecules.csv -o ./data --n-muts 5
-```
-
-## Package Structure
-
-```
-salsa_lit/
-├── __init__.py           # Main exports
-├── constants.py          # Static values (vocab, tokens, atom counts)
-├── config/               # Configuration dataclasses
-│   ├── model_config.py   # ModelConfig (architecture)
-│   ├── training_config.py # TrainingConfig (training hyperparams)
-│   └── data_config.py    # DataConfig (mutation settings)
-├── utils/                # Utility modules
-│   ├── io.py             # File I/O utilities
-│   ├── chemistry.py      # Chemistry/RDKit utilities
-│   └── fingerprints.py   # Fingerprint generation
-├── data/                 # Data handling
-│   ├── tokenizer.py      # SMILESTokenizer
-│   ├── datasets.py       # PyTorch Datasets
-│   ├── samplers.py       # Family-based batch sampling
-│   └── mutation.py       # Molecule mutation
-├── models/               # Neural network components
-│   ├── components.py     # Transformer components (PMA, MAB, etc.)
-│   ├── losses.py         # SupConLoss, reconstruction loss
-│   └── salsa_net.py      # Main SalsaNet model
-├── lightning/            # Lightning integration
-│   ├── salsa_module.py   # LightningModule wrapper
-│   └── data_module.py    # DataModule for data loading
-├── api/                  # High-level API
-│   ├── train.py          # cook_salsa()
-│   ├── inference.py      # serve_salsa(), load_model()
-│   └── mutate.py         # mutate_dataset()
-└── cli/                  # Command-line interface
-    └── main.py           # CLI entry point
-```
-
-## Multi-GPU Training
-
-SALSA-Lit uses PyTorch Lightning for seamless multi-GPU training:
+### Creating evaluation data
 
 ```python
-# Automatic multi-GPU with DDP
-training_config = TrainingConfig(
-    devices=4,              # Number of GPUs
-    accelerator='gpu',
-    precision='16-mixed',   # Mixed precision for speed
+from salsa_lit import supermutate_dataset, SuperMutantConfig
+
+df, path = supermutate_dataset(
+    "anchors.parquet",
+    output_file="supermutants.parquet",
+    config=SuperMutantConfig(depth=5, n_branches=1),
+    n_jobs=8,
 )
 ```
+
+Supermutants are chains of successive single edits, so the compound at depth
+*n* is *n* graph edits from its anchor.
 
 ## Configuration
 
 ### ModelConfig
-- `dim_salsa`: SALSA embedding dimension (default: 32)
+- `dim_salsa`: SALSA embedding dimension (default: 16)
 - `dim_emb`: Transformer hidden dimension (default: 512)
 - `n_heads`: Number of attention heads (default: 8)
 - `L_enc`: Encoder layers (default: 8)
 - `L_dec`: Decoder layers (default: 8)
 - `dim_ff`: Feed-forward dimension (default: 2048)
 - `dropout`: Dropout rate (default: 0.1)
+- `pool_func`: 'avg', 'max' or 'set' (default: 'avg')
+- `proj_head`: Use a projection head (default: False)
 
 ### TrainingConfig
 - `n_epochs`: Number of training epochs (default: 1)
 - `batch_size`: Families per batch (default: 50)
 - `lr`: Learning rate (default: 0.00001)
 - `losses`: Loss functions to use (default: ['Recon', 'SupCon'])
+- `save_step`: Checkpoint every N steps (default: 10000)
 - `devices`: Number of GPUs (default: 1)
 - `accelerator`: 'auto', 'gpu', 'cpu' (default: 'auto')
-- `precision`: '32', '16-mixed', 'bf16-mixed' (default: '32')
+- `precision`: '32', '16-mixed', 'bf16-mixed' (default: 'bf16-mixed')
+- `num_workers`: Dataloader workers (default: 4)
 
 ### DataConfig
 - `n_muts`: Mutations per anchor (default: 5)
 - `mahala_thresh`: Mahalanobis distance threshold (default: 6.0)
 - `weight`: 'chembl' or 'uniform' (default: 'chembl')
-- `actions`: Mutation types (default: ['Add', 'Remove', 'Replace'])
+- `actions`: Mutation types (default: ['Add', 'Replace', 'Remove'])
 
-## Backward Compatibility
+### SuperMutantConfig
+- `depth`: Maximum edit depth per chain (default: 5)
+- `n_branches`: Chains grown per anchor (default: 1)
+- `mahala_thresh`: Mahalanobis distance threshold (default: 6.0)
+- `weight`: 'chembl' or 'uniform' (default: 'chembl')
+- `actions`: Mutation types (default: ['Add', 'Replace', 'Remove'])
 
-The original `salsa/` package remains unchanged. Models trained with the old code can be loaded:
+## Command Line Interface
 
-```python
-from salsa_lit import SalsaNet
+```bash
+# Create training data
+salsa-lit mutate source_molecules.parquet -o data/ --n-muts 5
 
-# Load old model weights
-model = SalsaNet.from_pretrained("old_model_dir/")
+# Create evaluation data
+salsa-lit supermutate anchors.parquet -o data/ --depth 5 --n-jobs 8
+
+# Train a model
+salsa-lit train training_data.parquet -o run/ --epochs 30 --devices 4
+
+# Generate embeddings
+salsa-lit embed molecules.parquet -m run/ -o embeddings.parquet
 ```
 
-## Requirements
-
-Core dependencies (installed automatically with `pip install -e .`):
-
-- Python
-- PyTorch
-- Lightning
-- RDKit
-- pandas
-- numpy
-- scipy
-- tqdm
-- PyYAML
-
-## License
-
-MIT
+Every command accepts `--format {parquet,csv}`, defaulting to parquet; an
+explicit `.csv` output path takes precedence over the flag. Run
+`salsa-lit <command> --help` for the full option list.

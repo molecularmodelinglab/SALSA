@@ -1,5 +1,5 @@
 """
-SalsaNet model for learning structurally aware latent space autoencoder.
+SalsaNet model for learning semantically aware latent space autoencoder.
 """
 
 import os
@@ -26,7 +26,7 @@ from salsa_lit.models.components import (
 
 class SalsaNet(nn.Module):
     """
-    SalsaNet model for learning structurally aware latent space autoencoder.
+    SalsaNet model for learning semantically aware latent space autoencoder.
 
     The model consists of:
     1. Token embedding + positional encoding

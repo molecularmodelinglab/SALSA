@@ -1,5 +1,6 @@
 """Shared fixtures for the salsa_lit test suite."""
 
+import glob
 import os
 
 import pytest
@@ -11,9 +12,8 @@ from salsa_lit.data.tokenizer import SMILESTokenizer
 from salsa_lit.models.salsa_net import SalsaNet
 
 
-TRAINED_CKPT = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    'models', 'model_epoch=21_step=1200000.ckpt'
+MODELS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'models'
 )
 
 
@@ -62,7 +62,9 @@ def max_len_smiles():
 
 @pytest.fixture
 def trained_model_path():
-    """Path to the trained checkpoint, skipping the test if it is absent."""
-    if not os.path.exists(TRAINED_CKPT):
-        pytest.skip(f'no trained checkpoint at {TRAINED_CKPT}')
-    return TRAINED_CKPT
+    """Path to a trained checkpoint, preferring a weights-only copy."""
+    paths = sorted(glob.glob(os.path.join(MODELS_DIR, '*.ckpt')))
+    paths.sort(key=lambda p: not p.endswith('_weights.ckpt'))
+    if not paths:
+        pytest.skip(f'no trained checkpoint in {MODELS_DIR}')
+    return paths[0]

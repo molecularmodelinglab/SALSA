@@ -160,7 +160,7 @@ def main(argv=None):
     """Main entry point for SALSA CLI."""
     parser = argparse.ArgumentParser(
         prog='salsa-lit',
-        description='SALSA: Structurally-Aware Latent Space Autoencoder for molecules'
+        description='SALSA: Semantically-Aware Latent Space Autoencoder for molecules'
     )
 
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
@@ -169,85 +169,128 @@ def main(argv=None):
     train_parser = subparsers.add_parser('train', help='Train a SALSA model')
     train_parser.add_argument('train_data',
                               help='Path to training parquet/CSV with mutated molecules')
-    train_parser.add_argument('-o', '--output-dir', help='Output directory for model')
-    train_parser.add_argument('--val-data', help='Path to validation parquet/CSV')
-    train_parser.add_argument('--n-samp', type=int, default=-1, help='Number of families to sample')
+    train_parser.add_argument('-o', '--output-dir',
+                              help='Output directory for model '
+                                   '(default: ./SALSA_<timestamp>)')
+    train_parser.add_argument('--val-data', help='Path to validation parquet/CSV '
+                                                 '(default: no validation)')
+    train_parser.add_argument('--n-samp', type=int, default=-1,
+                              help='Number of families to sample '
+                                   '(default: %(default)s, use all)')
 
     # Model architecture
-    train_parser.add_argument('--dim-salsa', type=int, default=32, help='SALSA embedding dimension')
-    train_parser.add_argument('--dim-emb', type=int, default=512, help='Transformer hidden dimension')
-    train_parser.add_argument('--n-heads', type=int, default=8, help='Number of attention heads')
-    train_parser.add_argument('--n-enc-layers', type=int, default=8, help='Encoder layers')
-    train_parser.add_argument('--n-dec-layers', type=int, default=8, help='Decoder layers')
-    train_parser.add_argument('--dim-ff', type=int, default=2048, help='Feed-forward dimension')
-    train_parser.add_argument('--dropout', type=float, default=0.1, help='Dropout rate')
+    train_parser.add_argument('--dim-salsa', type=int, default=16,
+                              help='SALSA embedding dimension (default: %(default)s)')
+    train_parser.add_argument('--dim-emb', type=int, default=512,
+                              help='Transformer hidden dimension (default: %(default)s)')
+    train_parser.add_argument('--n-heads', type=int, default=8,
+                              help='Number of attention heads (default: %(default)s)')
+    train_parser.add_argument('--n-enc-layers', type=int, default=8,
+                              help='Encoder layers (default: %(default)s)')
+    train_parser.add_argument('--n-dec-layers', type=int, default=8,
+                              help='Decoder layers (default: %(default)s)')
+    train_parser.add_argument('--dim-ff', type=int, default=2048,
+                              help='Feed-forward dimension (default: %(default)s)')
+    train_parser.add_argument('--dropout', type=float, default=0.1,
+                              help='Dropout rate (default: %(default)s)')
 
     # Training hyperparameters
-    train_parser.add_argument('--epochs', type=int, default=30, help='Number of epochs')
-    train_parser.add_argument('--batch-size', type=int, default=50, help='Batch size (families per batch)')
-    train_parser.add_argument('--learning-rate', type=float, default=0.00001, help='Learning rate')
-    train_parser.add_argument('--save-step', type=int, default=10000, help='Checkpoint save interval')
+    train_parser.add_argument('--epochs', type=int, default=30,
+                              help='Number of epochs (default: %(default)s)')
+    train_parser.add_argument('--batch-size', type=int, default=50,
+                              help='Batch size (families per batch) (default: %(default)s)')
+    train_parser.add_argument('--learning-rate', type=float, default=0.00001,
+                              help='Learning rate (default: %(default)s)')
+    train_parser.add_argument('--save-step', type=int, default=10000,
+                              help='Checkpoint save interval (default: %(default)s)')
 
     # Hardware
-    train_parser.add_argument('--devices', type=int, default=1, help='Number of GPUs')
-    train_parser.add_argument('--accelerator', default='auto', help='Accelerator type')
+    train_parser.add_argument('--devices', type=int, default=1,
+                              help='Number of GPUs (default: %(default)s)')
+    train_parser.add_argument('--accelerator', default='auto',
+                              help='Accelerator type (default: %(default)s)')
     train_parser.add_argument('--precision', default='bf16-mixed',
-                               help="Training precision: 'bf16-mixed' (default), "
-                                    "'16-mixed', or '32'")
-    train_parser.add_argument('--num-workers', type=int, default=4, help='DataLoader workers')
+                              help="Training precision: 'bf16-mixed', '16-mixed' "
+                                   "or '32' (default: %(default)s)")
+    train_parser.add_argument('--num-workers', type=int, default=4,
+                              help='DataLoader workers (default: %(default)s)')
     train_parser.add_argument('--resume', metavar='CKPT_PATH', default=None,
-                               help='Path to checkpoint to resume training from (e.g. last.ckpt)')
+                              help='Path to checkpoint to resume training from '
+                                   '(e.g. last.ckpt) (default: start a new run)')
 
     ### Embed command
     embed_parser = subparsers.add_parser('embed', help='Generate embeddings for molecules')
     embed_parser.add_argument('input', help='Input SMILES (parquet or CSV file)')
     embed_parser.add_argument('-m', '--model', required=True, help='Path to trained model')
-    embed_parser.add_argument('-o', '--output', help='Output file for embeddings')
+    embed_parser.add_argument('-o', '--output',
+                              help='Output file for embeddings (default: not saved)')
     embed_parser.add_argument('--format', choices=['parquet', 'csv'], default=None,
                               help='Output format (default: parquet). An extension '
                                    'on --output takes precedence.')
-    embed_parser.add_argument('--batch-size', type=int, default=50, help='Inference batch size')
-    embed_parser.add_argument('--device', help='Device (cpu, cuda, cuda:0, etc.)')
+    embed_parser.add_argument('--batch-size', type=int, default=50,
+                              help='Inference batch size (default: %(default)s)')
+    embed_parser.add_argument('--device',
+                              help='Device (cpu, cuda, cuda:0, etc.) '
+                                   '(default: cuda if available, else cpu)')
     embed_parser.add_argument('--filter', action='store_true',
-                              help='Drop multi-fragment or over-length SMILES instead of '
-                                   'erroring on them (costs a canonicalization pass)')
+                              help='Drop multi-fragment, over-length or unparseable '
+                                   'SMILES instead of erroring on them (costs a '
+                                   'canonicalization pass)')
 
     ### Mutate command
     mutate_parser = subparsers.add_parser('mutate', help='Create mutated dataset for training')
     mutate_parser.add_argument('input', help='Input parquet or CSV with SMILES and ID columns')
-    mutate_parser.add_argument('-o', '--output-dir', help='Output directory')
+    mutate_parser.add_argument('-o', '--output-dir',
+                               help='Output directory (default: current directory)')
     mutate_parser.add_argument('--format', choices=['parquet', 'csv'], default=None,
                                help='Output format (default: parquet)')
-    mutate_parser.add_argument('--n-samp', type=int, default=-1, help='Number of molecules to sample')
-    mutate_parser.add_argument('--n-muts', type=int, default=5, help='Mutations per molecule')
-    mutate_parser.add_argument('--mahala-thresh', type=float, default=6.0, help='Mahalanobis threshold')
+    mutate_parser.add_argument('--n-samp', type=int, default=-1,
+                               help='Number of molecules to sample '
+                                    '(default: %(default)s, use all)')
+    mutate_parser.add_argument('--n-muts', type=int, default=5,
+                               help='Mutations per molecule (default: %(default)s)')
+    mutate_parser.add_argument('--mahala-thresh', type=float, default=6.0,
+                               help='Mahalanobis threshold (default: %(default)s)')
     mutate_parser.add_argument('--weight', choices=['chembl', 'uniform'], default='chembl',
-                               help='Mutation weighting scheme')
-    mutate_parser.add_argument('--no-filter', action='store_true', help='Skip input filtering')
-    mutate_parser.add_argument('--max-len', type=int, default=120, help='Max SMILES length')
-    mutate_parser.add_argument('--max-atoms', type=int, default=35, help='Max number of atoms')
+                               help='Mutation weighting scheme (default: %(default)s)')
+    mutate_parser.add_argument('--no-filter', action='store_true',
+                               help='Skip input filtering (default: filtering on)')
+    mutate_parser.add_argument('--max-len', type=int, default=120,
+                               help='Max SMILES length (default: %(default)s)')
+    mutate_parser.add_argument('--max-atoms', type=int, default=35,
+                               help='Max number of atoms (default: %(default)s)')
 
     ### Supermutate command
     sup_parser = subparsers.add_parser(
         'supermutate',
         help='Create supermutant dataset (chains of successive edits) for evaluation')
     sup_parser.add_argument('input', help='Input parquet or CSV with SMILES and ID columns')
-    sup_parser.add_argument('-o', '--output-dir', help='Output directory')
+    sup_parser.add_argument('-o', '--output-dir',
+                            help='Output directory (default: current directory)')
     sup_parser.add_argument('--format', choices=['parquet', 'csv'], default=None,
                             help='Output format (default: parquet)')
-    sup_parser.add_argument('--n-samp', type=int, default=-1, help='Number of anchors to sample')
+    sup_parser.add_argument('--n-samp', type=int, default=-1,
+                            help='Number of anchors to sample '
+                                 '(default: %(default)s, use all)')
     sup_parser.add_argument('--depth', type=int, default=5,
-                            help='Max GED depth; one compound per depth 1..N')
+                            help='Max GED depth; one compound per depth 1..N '
+                                 '(default: %(default)s)')
     sup_parser.add_argument('--n-branches', type=int, default=1,
-                            help='Independent chains grown per anchor')
+                            help='Independent chains grown per anchor '
+                                 '(default: %(default)s)')
     sup_parser.add_argument('--mahala-thresh', type=float, default=6.0,
-                            help='Mahalanobis threshold, applied at every step')
+                            help='Mahalanobis threshold, applied at every step '
+                                 '(default: %(default)s)')
     sup_parser.add_argument('--weight', choices=['chembl', 'uniform'], default='chembl',
-                            help='Mutation weighting scheme')
-    sup_parser.add_argument('--n-jobs', type=int, default=1, help='Worker processes')
-    sup_parser.add_argument('--no-filter', action='store_true', help='Skip input filtering')
-    sup_parser.add_argument('--max-len', type=int, default=120, help='Max SMILES length')
-    sup_parser.add_argument('--max-atoms', type=int, default=35, help='Max number of atoms')
+                            help='Mutation weighting scheme (default: %(default)s)')
+    sup_parser.add_argument('--n-jobs', type=int, default=1,
+                            help='Worker processes (default: %(default)s)')
+    sup_parser.add_argument('--no-filter', action='store_true',
+                            help='Skip input filtering (default: filtering on)')
+    sup_parser.add_argument('--max-len', type=int, default=120,
+                            help='Max SMILES length (default: %(default)s)')
+    sup_parser.add_argument('--max-atoms', type=int, default=35,
+                            help='Max number of atoms (default: %(default)s)')
 
     ### Parse and dispatch
     args = parser.parse_args(argv)

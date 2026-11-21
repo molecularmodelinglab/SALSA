@@ -38,7 +38,7 @@ class ModelConfig:
         Whether to use projection head (currently not recommended)
     """
     dim_emb: int = 512
-    dim_salsa: int = 32
+    dim_salsa: int = 16
     n_heads: int = 8
     L_enc: int = 8
     L_dec: int = 8

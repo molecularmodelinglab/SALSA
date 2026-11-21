@@ -83,7 +83,7 @@ embeddings, smiles = serve_salsa(
     model="salsa32",
     output_file="embeddings.parquet",
     batch_size=50,
-    filter_input=True,   # drop multi-fragment, over-length and unparseable input
+    filter_input=False,  # keep input the model cannot embed, and error on it
 )
 ```
 

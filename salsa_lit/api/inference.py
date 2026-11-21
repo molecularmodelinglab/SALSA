@@ -95,7 +95,7 @@ def serve_salsa(
     output_file: str = None,
     batch_size: int = 50,
     device: str = None,
-    filter_input: bool = False,
+    filter_input: bool = True,
     fmt: str = None,
     revision: str = None,
     cache_dir: str = None,
@@ -129,8 +129,8 @@ def serve_salsa(
         Device to use ('cpu', 'cuda', 'cuda:0', etc.)
         If None, uses CUDA if available.
     filter_input : bool
-        Screen out inputs the model cannot embed (multi-fragment SMILES, or
-        SMILES longer than MAX_SMI_LEN).
+        Drop input the model cannot embed: unparseable SMILES, multi-fragment
+        SMILES, and SMILES longer than MAX_SMI_LEN.
     fmt : str, optional
         Output format ('parquet' or 'csv') when `output_file` has no
         recognised extension. Defaults to parquet.
@@ -182,20 +182,35 @@ def serve_salsa(
         df = smiles
 
     # Stamp input row positions as IDs when the input has none
-    if not any(col in df.columns for col in ID_COLUMNS):
+    id_col = next((col for col in ID_COLUMNS if col in df.columns), None)
+    if id_col is None:
         df = df.reset_index(drop=True)
         df['ID'] = df.index
+        id_col = 'ID'
 
-    # Filter input if requested
+    # Drop input the model cannot embed
     if filter_input:
         df = df.copy()
         df['SMILES'] = df['SMILES'].apply(get_cansmiles)
-        unusable = (df['SMILES'].str.contains('.', regex=False)
-                    | (df['SMILES'].str.len() > MAX_SMI_LEN)
-                    | (df['SMILES'].str.len() == 0))
+
+        # Kept disjoint so the reported counts sum to the total
+        lengths = df['SMILES'].str.len()
+        empty = lengths == 0
+        multi = ~empty & df['SMILES'].str.contains('.', regex=False)
+        over = ~empty & ~multi & (lengths > MAX_SMI_LEN)
+        unusable = empty | multi | over
+
         if unusable.any():
-            print(f"Dropping {unusable.sum()} multi-fragment, over-length or "
-                  f"unparseable SMILES")
+            reasons = {'unparseable': empty, 'multi-fragment': multi,
+                       'over-length': over}
+            breakdown = ', '.join(f'{int(mask.sum())} {name}'
+                                  for name, mask in reasons.items()
+                                  if mask.any())
+            dropped = df.loc[unusable, id_col].tolist()
+            shown = ', '.join(str(i) for i in dropped[:5])
+            more = f', and {len(dropped) - 5} more' if len(dropped) > 5 else ''
+            print(f"Dropping {int(unusable.sum())} of {len(df)} molecules "
+                  f"({breakdown}). IDs: {shown}{more}")
             df = df[~unusable]
 
     # Create dataset and loader

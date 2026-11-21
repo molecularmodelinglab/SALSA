@@ -95,7 +95,7 @@ def embed_command(args):
         output_file=args.output,
         batch_size=args.batch_size,
         device=args.device,
-        filter_input=args.filter,
+        filter_input=not args.no_filter,
         fmt=resolve_output_format(args.output, args.format),
         revision=args.revision,
         cache_dir=args.cache_dir,
@@ -270,10 +270,10 @@ def main(argv=None):
     embed_parser.add_argument('--device',
                               help='Device (cpu, cuda, cuda:0, etc.) '
                                    '(default: cuda if available, else cpu)')
-    embed_parser.add_argument('--filter', action='store_true',
-                              help='Drop multi-fragment, over-length or unparseable '
-                                   'SMILES instead of erroring on them (costs a '
-                                   'canonicalization pass)')
+    embed_parser.add_argument('--no-filter', action='store_true',
+                              help='Keep multi-fragment, over-length and '
+                                   'unparseable SMILES; over-length input then '
+                                   'errors (default: filtering on)')
 
     ### Mutate command
     mutate_parser = subparsers.add_parser('mutate', help='Create mutated dataset for training')

@@ -95,7 +95,9 @@ class SMILESTokenizer:
         if n > self.max_len:
             raise ValueError(
                 f"SMILES is {n} tokens long, over the max_len of {self.max_len} "
-                f"the model was trained on: {smiles!r}"
+                f"the model was trained on. Over-length input is dropped when "
+                f"filtering is enabled, which is the default for embedding: "
+                f"{smiles!r}"
             )
 
         vec = np.full(self.max_vec_len, self.p_idx, dtype=np.int64)

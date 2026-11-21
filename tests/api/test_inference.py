@@ -211,6 +211,53 @@ def test_filtering_drops_multifragment_and_overlong(small_model):
     assert returned == ['CCO']
 
 
+def test_filtering_is_on_by_default(small_model):
+    """Over-length input is dropped without asking, not raised."""
+    _, returned = serve_salsa(['CCO', 'C' * 178, 'CCCO'], small_model,
+                              device='cpu')
+    assert returned == ['CCO', 'CCCO']
+
+
+def test_overlength_raises_when_filtering_is_off(small_model):
+    """Without filtering, over-length input still fails loudly."""
+    with pytest.raises(ValueError, match='over the max_len'):
+        serve_salsa(['CCO', 'C' * 178], small_model, device='cpu',
+                    filter_input=False)
+
+
+def test_overlength_error_names_the_escape_hatch(tokenizer):
+    """The tokenizer error says how to avoid it."""
+    with pytest.raises(ValueError, match='filtering'):
+        tokenizer.encode('C' * 178)
+
+
+def test_drop_report_breaks_down_by_reason(small_model, capsys):
+    """The dropped count is itemised and the IDs are named."""
+    smiles = ['CCO', 'C' * 178, 'CCO.CCO', 'not_a_molecule']
+    serve_salsa(smiles, small_model, device='cpu')
+
+    out = capsys.readouterr().out
+    assert 'Dropping 3 of 4 molecules' in out
+    assert '1 unparseable' in out
+    assert '1 multi-fragment' in out
+    assert '1 over-length' in out
+    assert 'IDs: 1, 2, 3' in out
+
+
+def test_drop_report_truncates_long_id_lists(small_model, capsys):
+    """Only the first few dropped IDs are printed."""
+    serve_salsa(['CCO'] + ['C' * 178] * 7, small_model, device='cpu')
+    out = capsys.readouterr().out
+    assert 'IDs: 1, 2, 3, 4, 5, and 2 more' in out
+
+
+def test_drop_report_uses_supplied_ids(small_model, capsys):
+    """Reported IDs come from the input's own identifier column."""
+    df = pd.DataFrame({'id': ['keep', 'toolong'], 'SMILES': ['CCO', 'C' * 178]})
+    serve_salsa(df, small_model, device='cpu')
+    assert 'IDs: toolong' in capsys.readouterr().out
+
+
 def test_trim_agrees_for_the_trained_model(trained_model_path, mixed_smiles,
                                            monkeypatch):
     """Trimming holds for the real model, not just a small random one."""

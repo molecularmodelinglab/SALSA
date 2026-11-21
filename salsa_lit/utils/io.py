@@ -106,6 +106,27 @@ def dataset_paths(directory):
     return sorted(paths)
 
 
+def dataset_columns(path):
+    """
+    List a dataset's column names without reading its rows.
+
+    Parameters
+    ----------
+    path : str
+        Path to a parquet or CSV file
+
+    Returns
+    -------
+    columns : list of str
+        Column names in file order
+    """
+    if infer_format(path) == 'parquet':
+        import pyarrow.parquet as pq
+        return list(pq.read_schema(path).names)
+
+    return pd.read_csv(path, nrows=0).columns.tolist()
+
+
 def read_ds(dataset, columns=None):
     """
     Read a dataset from file or return as-is if already a DataFrame.
@@ -177,9 +198,9 @@ def write_ds(df, path, fmt=None, na_values=NA_VALUES):
     return path
 
 
-def write_embeddings(path, smiles, embeddings, fmt=None):
+def write_embeddings(path, smiles, embeddings, ids=None, fmt=None):
     """
-    Write SALSA embeddings as a SMILES column plus one column per dimension.
+    Write SALSA embeddings as one column per dimension, keyed by ID.
 
     Parameters
     ----------
@@ -189,6 +210,8 @@ def write_embeddings(path, smiles, embeddings, fmt=None):
         SMILES strings, one per embedding row
     embeddings : np.ndarray
         Embeddings of shape (n_molecules, dim_salsa)
+    ids : sequence, optional
+        Identifiers, one per row, written as a leading 'ID' column
     fmt : str, optional
         Format to use when `path` has no recognised extension.
 
@@ -204,6 +227,8 @@ def write_embeddings(path, smiles, embeddings, fmt=None):
 
     df = pd.DataFrame(emb, columns=[f'dim_{i}' for i in range(emb.shape[1])])
     df.insert(0, 'SMILES', list(smiles))
+    if ids is not None:
+        df.insert(0, 'ID', list(ids))
 
     return write_ds(df, path, fmt=fmt, na_values=None)
 

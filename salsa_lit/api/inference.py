@@ -17,9 +17,9 @@ from salsa_lit.constants import MAX_SMI_LEN
 from salsa_lit.models.salsa_net import SalsaNet
 from salsa_lit.lightning.salsa_module import SalsaLightningModule
 from salsa_lit.data.tokenizer import SMILESTokenizer
-from salsa_lit.data.datasets import InferenceDataset
+from salsa_lit.data.datasets import ID_COLUMNS, InferenceDataset
 from salsa_lit.utils.chemistry import get_cansmiles
-from salsa_lit.utils.io import read_ds, write_embeddings
+from salsa_lit.utils.io import dataset_columns, read_ds, write_embeddings
 from salsa_lit.pretrained import resolve_model_path
 
 
@@ -37,14 +37,22 @@ def trim_collate(items: List[dict]) -> dict:
     batch : dict
         Collated batch with 'seq', 'pad_mask' and 'avg_mask' trimmed to the
         longest unpadded sequence in the batch. 'out_mask' is per-token and
-        so is left as-is.
+        so is left as-is. 'id' is kept as a plain list, so identifiers reach
+        the output with their values unchanged.
     """
+    ids = [item['id'] for item in items] if 'id' in items[0] else None
+    if ids is not None:
+        items = [{k: v for k, v in item.items() if k != 'id'} for item in items]
+
     batch = default_collate(items)
 
     keep = int((~batch['pad_mask']).sum(dim=1).max())
     batch['seq'] = batch['seq'][:, :keep]
     batch['pad_mask'] = batch['pad_mask'][:, :keep]
     batch['avg_mask'] = batch['avg_mask'][:, :keep]
+
+    if ids is not None:
+        batch['id'] = ids
 
     return batch
 
@@ -111,7 +119,10 @@ def serve_salsa(
         Defaults to the pretrained DEFAULT_MODEL.
     output_file : str, optional
         Path to save embeddings to. If None, results are only returned.
-        A '.csv' extension writes CSV, otherwise parquet is used.
+        A '.csv' extension writes CSV, otherwise parquet is used. Written
+        columns are 'ID', 'SMILES' and one per embedding dimension; the ID
+        is taken from the input's 'ID', 'Id' or 'id' column when it has one,
+        and is the input row position otherwise.
     batch_size : int
         Batch size for inference
     device : str, optional
@@ -164,9 +175,16 @@ def serve_salsa(
     if isinstance(smiles, list):
         df = pd.DataFrame({'SMILES': smiles})
     elif isinstance(smiles, str):
-        df = read_ds(smiles, columns=['SMILES'])
+        # Read the identifier column
+        id_cols = [c for c in dataset_columns(smiles) if c in ID_COLUMNS]
+        df = read_ds(smiles, columns=['SMILES'] + id_cols[:1])
     else:
         df = smiles
+
+    # Stamp input row positions as IDs when the input has none
+    if not any(col in df.columns for col in ID_COLUMNS):
+        df = df.reset_index(drop=True)
+        df['ID'] = df.index
 
     # Filter input if requested
     if filter_input:
@@ -190,6 +208,7 @@ def serve_salsa(
     # Run inference
     all_embeddings = []
     all_smiles = []
+    all_ids = []
 
     with torch.no_grad():
         for batch in tqdm(loader, desc="Generating embeddings"):
@@ -204,12 +223,13 @@ def serve_salsa(
 
             all_embeddings.append(salsa_latent.cpu().numpy())
             all_smiles.extend(batch['smiles'])
+            all_ids.extend(batch['id'])
 
     embeddings = np.vstack(all_embeddings)
 
     # Save if output file specified
     if output_file is not None:
-        write_embeddings(output_file, all_smiles, embeddings, fmt=fmt)
+        write_embeddings(output_file, all_smiles, embeddings, ids=all_ids, fmt=fmt)
         print(f"Saved embeddings to {output_file}")
 
     return embeddings, all_smiles

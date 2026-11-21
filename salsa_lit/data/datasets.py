@@ -13,6 +13,10 @@ from salsa_lit.constants import MAX_SMI_LEN
 from salsa_lit.data.tokenizer import SMILESTokenizer
 
 
+# Accepted spellings of the identifier column, in order of preference.
+ID_COLUMNS = ('ID', 'Id', 'id')
+
+
 class InferenceDataset(Dataset):
     """
     Dataset for running inference on a set of SMILES.
@@ -50,6 +54,13 @@ class InferenceDataset(Dataset):
         df = df_in.reset_index(drop=True, inplace=False)
         df['Origin_id'] = df.index
 
+        # Normalise the identifier column's spelling, if one was supplied
+        if 'ID' not in df.columns:
+            for alias in ID_COLUMNS[1:]:
+                if alias in df.columns:
+                    df = df.rename(columns={alias: 'ID'})
+                    break
+
         # Canonicalize SMILES
         if canonicalize:
             df['SMILES'] = df["SMILES"].apply(lambda x: get_cansmiles(x))
@@ -66,7 +77,7 @@ class InferenceDataset(Dataset):
 
         # Inject ID column if missing
         if 'ID' not in df.columns:
-            df['ID'] = df.index
+            df['ID'] = df['Origin_id']
 
         # Reorder columns
         other_cols = [x for x in df.columns.values if x not in ['Origin_id', 'SMILES', 'ID']]
@@ -74,6 +85,7 @@ class InferenceDataset(Dataset):
 
         self.dataframe = df[cols].copy()
         self._smiles = self.dataframe["SMILES"].tolist()
+        self._ids = self.dataframe["ID"].tolist()
 
     def __len__(self):
         return len(self.dataframe)
@@ -93,6 +105,7 @@ class InferenceDataset(Dataset):
             Dictionary with keys:
             - 'seq': torch.Tensor of token indices
             - 'smiles': str, the SMILES string
+            - 'id': the supplied identifier, or the input row position
             - 'pad_mask': padding mask
             - 'avg_mask': averaging mask
             - 'out_mask': output mask
@@ -107,6 +120,7 @@ class InferenceDataset(Dataset):
         return {
             'seq': vec,
             'smiles': smi,
+            'id': self._ids[idx],
             'pad_mask': pad_mask,
             'avg_mask': avg_mask,
             'out_mask': out_mask

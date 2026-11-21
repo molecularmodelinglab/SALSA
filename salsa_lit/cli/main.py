@@ -10,6 +10,8 @@ Provides commands for:
 import argparse
 import sys
 
+from salsa_lit.pretrained import DEFAULT_MODEL, model_names
+
 
 def resolve_output_format(output, fmt_flag):
     """
@@ -95,6 +97,8 @@ def embed_command(args):
         device=args.device,
         filter_input=args.filter,
         fmt=resolve_output_format(args.output, args.format),
+        revision=args.revision,
+        cache_dir=args.cache_dir,
     )
 
     print(f"Generated {len(embeddings)} embeddings of dimension {embeddings.shape[1]}")
@@ -154,6 +158,30 @@ def supermutate_command(args):
 
     print(f"Created supermutant dataset with {len(df)} compounds")
     print(f"Saved to {output_path}")
+
+
+def download_command(args):
+    """Download pretrained models into the local cache."""
+    from salsa_lit.pretrained import (
+        DEFAULT_MODEL, cached_path, download_pretrained, list_pretrained,
+        model_names
+    )
+
+    if args.list:
+        print(f"{'name':<10} {'dim':>4}  {'cached':<7} file")
+        for name, spec in list_pretrained().items():
+            mark = 'yes' if cached_path(name, revision=args.revision,
+                                        cache_dir=args.cache_dir) else 'no'
+            default = '  (default)' if name == DEFAULT_MODEL else ''
+            print(f"{name:<10} {spec['dim_salsa']:>4}  {mark:<7} "
+                  f"{spec['filename']}{default}")
+        return
+
+    names = model_names() if args.all else [args.name or DEFAULT_MODEL]
+    for name in names:
+        path = download_pretrained(name, revision=args.revision,
+                                   cache_dir=args.cache_dir)
+        print(f"{name}: {path}")
 
 
 def main(argv=None):
@@ -221,7 +249,17 @@ def main(argv=None):
     ### Embed command
     embed_parser = subparsers.add_parser('embed', help='Generate embeddings for molecules')
     embed_parser.add_argument('input', help='Input SMILES (parquet or CSV file)')
-    embed_parser.add_argument('-m', '--model', required=True, help='Path to trained model')
+    embed_parser.add_argument('-m', '--model', default=None,
+                              help=f'Pretrained model name ({", ".join(model_names())}) '
+                                   f'or path to a trained model '
+                                   f'(default: {DEFAULT_MODEL}, downloaded on '
+                                   f'first use)')
+    embed_parser.add_argument('--revision',
+                              help='Model repository revision (default: the '
+                                   'pinned release)')
+    embed_parser.add_argument('--cache-dir',
+                              help='Model download cache (default: the Hugging '
+                                   'Face cache)')
     embed_parser.add_argument('-o', '--output',
                               help='Output file for embeddings (default: not saved)')
     embed_parser.add_argument('--format', choices=['parquet', 'csv'], default=None,
@@ -292,6 +330,24 @@ def main(argv=None):
     sup_parser.add_argument('--max-atoms', type=int, default=35,
                             help='Max number of atoms (default: %(default)s)')
 
+    ### Download command
+    dl_parser = subparsers.add_parser(
+        'download', help='Download pretrained models into the local cache')
+    dl_parser.add_argument('name', nargs='?', default=None,
+                           help=f'Pretrained model to fetch '
+                                f'({", ".join(model_names())}) '
+                                f'(default: {DEFAULT_MODEL})')
+    dl_parser.add_argument('--all', action='store_true',
+                           help='Fetch every pretrained model')
+    dl_parser.add_argument('--list', action='store_true',
+                           help='List the pretrained models and exit')
+    dl_parser.add_argument('--revision',
+                           help='Model repository revision (default: the '
+                                'pinned release)')
+    dl_parser.add_argument('--cache-dir',
+                           help='Model download cache (default: the Hugging '
+                                'Face cache)')
+
     ### Parse and dispatch
     args = parser.parse_args(argv)
 
@@ -307,6 +363,8 @@ def main(argv=None):
         mutate_command(args)
     elif args.command == 'supermutate':
         supermutate_command(args)
+    elif args.command == 'download':
+        download_command(args)
     else:
         parser.print_help()
         sys.exit(1)

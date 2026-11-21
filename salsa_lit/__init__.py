@@ -19,6 +19,11 @@ from .data.tokenizer import SMILESTokenizer
 from .data.datasets import InferenceDataset, TrainingDataset
 from .data.samplers import RandomFamSampler
 
+# Pretrained models
+from .pretrained import (
+    DEFAULT_MODEL, download_pretrained, list_pretrained, model_names
+)
+
 # API
 from .api.train import cook_salsa
 from .api.inference import serve_salsa, load_model
@@ -32,6 +37,8 @@ __all__ = [
     'SalsaNet', 'SalsaLightningModule', 'SalsaDataModule',
     # Data
     'SMILESTokenizer', 'InferenceDataset', 'TrainingDataset', 'RandomFamSampler',
+    # Pretrained models
+    'DEFAULT_MODEL', 'download_pretrained', 'list_pretrained', 'model_names',
     # API
     'cook_salsa', 'serve_salsa', 'load_model', 'mutate_dataset',
     'supermutate_dataset', 'prepare_supermutant_data',

@@ -3,6 +3,34 @@
 Python API and command line reference. See the [main README](../README.md) for
 installation and a quick start.
 
+## Pretrained models
+
+| name | dim | training steps |
+|---|---|---|
+| `salsa8` | 8 | 2,300,000 |
+| `salsa16` | 16 | 3,400,000 |
+| `salsa24` | 24 | 1,600,000 |
+| `salsa32` | 32 | 1,200,000 |
+
+`salsa16` is the default. Weights live in the
+[molecularmodelinglab/SALSA](https://huggingface.co/molecularmodelinglab/SALSA)
+repository, pinned to a fixed revision so results stay reproducible, and are
+downloaded into the Hugging Face cache on first use. Set `HF_HOME` or pass
+`cache_dir` to put them elsewhere.
+
+```python
+from salsa_lit import download_pretrained, list_pretrained, load_model
+
+list_pretrained()                  # name -> filename and dimension
+download_pretrained('salsa32')     # pre-fetch, returns the cached path
+model = load_model('salsa32')      # downloads if needed
+model = load_model()               # the default model
+model = load_model('run/')         # a local directory or checkpoint
+```
+
+Anywhere a model is accepted, an existing path takes precedence over a
+registry name.
+
 ## Python API
 
 ### Training
@@ -48,11 +76,11 @@ GPUs and leave the rest alone.
 ```python
 from salsa_lit import serve_salsa, load_model
 
-embeddings, smiles = serve_salsa(["CCO", "CC(=O)O", "c1ccccc1"], model="run/")
+embeddings, smiles = serve_salsa(["CCO", "CC(=O)O", "c1ccccc1"])
 
 embeddings, smiles = serve_salsa(
     "molecules.parquet",
-    model="run/",
+    model="salsa32",
     output_file="embeddings.parquet",
     batch_size=50,
     filter_input=True,   # drop multi-fragment, over-length and unparseable input
@@ -131,6 +159,11 @@ Supermutants are chains of successive single edits, so the compound at depth
 ## Command Line Interface
 
 ```bash
+# Pretrained models
+salsa-lit download --list
+salsa-lit download salsa32
+salsa-lit download --all
+
 # Create training data
 salsa-lit mutate source_molecules.parquet -o data/ --n-muts 5
 
@@ -140,7 +173,9 @@ salsa-lit supermutate anchors.parquet -o data/ --depth 5 --n-jobs 8
 # Train a model
 salsa-lit train training_data.parquet -o run/ --epochs 30 --devices 4
 
-# Generate embeddings
+# Generate embeddings, with a pretrained model or your own
+salsa-lit embed molecules.parquet -o embeddings.parquet
+salsa-lit embed molecules.parquet -m salsa32 -o embeddings.parquet
 salsa-lit embed molecules.parquet -m run/ -o embeddings.parquet
 ```
 

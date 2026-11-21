@@ -20,26 +20,36 @@ Optional extras: `viz` for plotting and UMAP, `dev` for tests and linters.
 
 ## Quick Start
 
-Installing provides the `salsa-lit` command:
+Installing provides the `salsa-lit` command. Embedding with a pretrained
+model needs nothing else; the weights download and cache on first use:
+
+```bash
+salsa-lit embed molecules.parquet -o embeddings.parquet
+```
+
+```python
+from salsa_lit import serve_salsa
+
+embeddings, smiles = serve_salsa("molecules.parquet",
+                                 output_file="embeddings.parquet")
+```
+
+Pretrained models are `salsa8`, `salsa16`, `salsa24` and `salsa32`, named for
+their embedding dimension, with `salsa16` the default. Pass one by name, or
+pass a path to use your own:
+
+```bash
+salsa-lit download --list              # what is available and what is cached
+salsa-lit embed molecules.parquet -m salsa32 -o embeddings.parquet
+salsa-lit embed molecules.parquet -m run/ -o embeddings.parquet
+```
+
+To train your own instead:
 
 ```bash
 salsa-lit mutate molecules.parquet -o mutants/
 salsa-lit train mutants/<generated>.parquet -o run/
 salsa-lit embed molecules.parquet -m run/ -o embeddings.parquet
-```
-
-The same three steps from Python:
-
-```python
-from salsa_lit import mutate_dataset, cook_salsa, serve_salsa
-
-df, train_path = mutate_dataset("molecules.parquet",
-                                output_file="mutants.parquet")
-
-model, trainer = cook_salsa(train_path, save_dir="run/")
-
-embeddings, smiles = serve_salsa("molecules.parquet", model="run/",
-                                 output_file="embeddings.parquet")
 ```
 
 Datasets are read and written as parquet by default; pass a `.csv` path or

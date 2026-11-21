@@ -20,6 +20,7 @@ from salsa_lit.data.tokenizer import SMILESTokenizer
 from salsa_lit.data.datasets import InferenceDataset
 from salsa_lit.utils.chemistry import get_cansmiles
 from salsa_lit.utils.io import read_ds, write_embeddings
+from salsa_lit.pretrained import resolve_model_path
 
 
 def trim_collate(items: List[dict]) -> dict:
@@ -48,36 +49,48 @@ def trim_collate(items: List[dict]) -> dict:
     return batch
 
 
-def load_model(path: str, map_location: str = None) -> SalsaNet:
+def load_model(path: str = None, map_location: str = None,
+               revision: str = None, cache_dir: str = None) -> SalsaNet:
     """
-    Load a trained SALSA model from checkpoint.
+    Load a trained SALSA model, downloading a pretrained one if asked for.
 
     Parameters
     ----------
-    path : str
-        Path to model directory or checkpoint file.
-        If directory, looks for model_trained_model.pt and params.yml
+    path : str, optional
+        One of:
+        - a pretrained model name, downloaded and cached on first use
+          (see salsa_lit.pretrained.model_names())
+        - path to a checkpoint file
+        - path to a model directory holding model_trained_model.pt and params.yml
+        Defaults to the pretrained DEFAULT_MODEL.
     map_location : str, optional
         Device to map model to (e.g., 'cpu', 'cuda:0')
+    revision : str, optional
+        Repository revision for a pretrained name. Defaults to the pinned one.
+    cache_dir : str, optional
+        Download cache directory. Defaults to the Hugging Face cache.
 
     Returns
     -------
     model : SalsaNet
         Loaded model in eval mode
     """
-    model = SalsaNet.from_pretrained(path, map_location=map_location)
+    resolved = resolve_model_path(path, revision=revision, cache_dir=cache_dir)
+    model = SalsaNet.from_pretrained(resolved, map_location=map_location)
     model.eval()
     return model
 
 
 def serve_salsa(
     smiles: Union[str, pd.DataFrame, List[str]],
-    model: Union[str, SalsaNet, SalsaLightningModule],
+    model: Union[str, SalsaNet, SalsaLightningModule] = None,
     output_file: str = None,
     batch_size: int = 50,
     device: str = None,
     filter_input: bool = False,
     fmt: str = None,
+    revision: str = None,
+    cache_dir: str = None,
 ) -> Tuple[np.ndarray, List[str]]:
     """
     Generate SALSA embeddings for a set of SMILES.
@@ -89,11 +102,13 @@ def serve_salsa(
         - Path to a parquet or CSV file with a 'SMILES' column
         - DataFrame with 'SMILES' column
         - List of SMILES strings
-    model : str or SalsaNet or SalsaLightningModule
+    model : str or SalsaNet or SalsaLightningModule, optional
         Trained model. Can be:
+        - A pretrained model name, downloaded on first use
         - Path to model directory or checkpoint
         - SalsaNet model object
         - SalsaLightningModule object
+        Defaults to the pretrained DEFAULT_MODEL.
     output_file : str, optional
         Path to save embeddings to. If None, results are only returned.
         A '.csv' extension writes CSV, otherwise parquet is used.
@@ -108,6 +123,10 @@ def serve_salsa(
     fmt : str, optional
         Output format ('parquet' or 'csv') when `output_file` has no
         recognised extension. Defaults to parquet.
+    revision : str, optional
+        Repository revision when `model` is a pretrained name.
+    cache_dir : str, optional
+        Download cache directory. Defaults to the Hugging Face cache.
 
     Returns
     -------
@@ -131,9 +150,10 @@ def serve_salsa(
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
     device = torch.device(device)
 
-    # Load model if path provided
-    if isinstance(model, str):
-        model = load_model(model, map_location=str(device))
+    # Load the model unless one was passed in directly
+    if model is None or isinstance(model, str):
+        model = load_model(model, map_location=str(device), revision=revision,
+                           cache_dir=cache_dir)
     elif isinstance(model, SalsaLightningModule):
         model = model.model
 
